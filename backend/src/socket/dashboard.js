@@ -23,10 +23,21 @@ function registerDashboardSocket(dashboardNsp, visitorNsp) {
     try {
       const jwt = require("jsonwebtoken");
       const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret");
-      socket.agentId      = decoded.agentId;
-      socket.workspaceId  = decoded.workspaceId;
-      socket.agentName    = decoded.name;
-      socket.agentRole    = decoded.role;
+
+      // Fetch fresh workspace_id, role, and name from DB to prevent stale JWT token workspace mismatch
+      const { rows } = await pool.query(
+        "SELECT id, workspace_id, role, name, is_active FROM agents WHERE id = $1",
+        [decoded.agentId]
+      );
+
+      if (!rows[0] || rows[0].is_active === false) {
+        return next(new Error("Agent inactive or not found"));
+      }
+
+      socket.agentId      = rows[0].id;
+      socket.workspaceId  = rows[0].workspace_id;
+      socket.agentName    = rows[0].name;
+      socket.agentRole    = rows[0].role;
       next();
     } catch {
       next(new Error("Invalid token"));
