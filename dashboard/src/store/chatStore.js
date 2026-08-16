@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { io } from "socket.io-client";
 import api from "../api";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+const defaultBackend = typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:3001" : "https://vlivechat-backend.onrender.com";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL?.replace(/\/api\/v1\/?$/, "") || defaultBackend;
 
 const useChatStore = create((set, get) => ({
   // ── Auth ─────────────────────────────────────────────────────

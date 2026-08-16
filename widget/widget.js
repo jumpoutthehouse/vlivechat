@@ -12,7 +12,7 @@
 
   const cfg = window.VLiveChat || {};
   const WORKSPACE  = cfg.workspace || "";
-  const API_BASE   = cfg.apiBase   || "http://localhost:3001";
+  const API_BASE   = cfg.apiBase   || (window.location.hostname === "localhost" ? "http://localhost:3001" : "https://vlivechat-backend.onrender.com");
   const WIDGET_URL = cfg.widgetUrl || (API_BASE + "/widget/livechat-widget.html");
 
   if (!WORKSPACE) {
