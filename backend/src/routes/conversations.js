@@ -342,6 +342,70 @@ router.patch("/:id/resolve", auth, async (req, res) => {
   }
 });
 
+// PATCH /api/v1/conversations/:id/block — block/unblock visitor
+router.patch("/:id/block", auth, async (req, res) => {
+  try {
+    const { isBlocked } = req.body;
+    const isBlockedBool = !!isBlocked;
+
+    const { rows: cRows } = await pool.query(
+      "SELECT * FROM conversations WHERE id=$1",
+      [req.params.id]
+    );
+    if (!cRows[0]) return res.status(404).json({ error: "Percakapan tidak ditemukan" });
+    const conv = cRows[0];
+
+    // Update ALL active conversations for this visitor in this workspace
+    await pool.query(
+      `UPDATE conversations
+       SET is_blocked=$1,
+           flow_mode=CASE WHEN $1 = TRUE THEN 'agent' ELSE flow_mode END,
+           updated_at=NOW()
+       WHERE visitor_id=$2 AND workspace_id=$3`,
+      [isBlockedBool, conv.visitor_id, conv.workspace_id]
+    );
+
+    // Notify socket namespaces real-time
+    const io = req.app.get("io");
+    if (io) {
+      const visitorNsp = io.of("/livechat");
+      const dashboardNsp = io.of("/dashboard");
+
+      if (isBlockedBool) {
+        visitorNsp.to(`visitor:${conv.visitor_id}`).emit("visitor:blocked");
+        visitorNsp.to(`conv:${conv.id}`).emit("visitor:blocked");
+      } else {
+        visitorNsp.to(`visitor:${conv.visitor_id}`).emit("visitor:unblocked");
+        visitorNsp.to(`conv:${conv.id}`).emit("visitor:unblocked");
+      }
+
+      dashboardNsp.to(`workspace:${conv.workspace_id}`).emit("conversation:update", {
+        conversationId: conv.id,
+        is_blocked: isBlockedBool,
+        flow_mode: isBlockedBool ? 'agent' : conv.flow_mode,
+      });
+      dashboardNsp.to("superadmin").emit("conversation:update", {
+        conversationId: conv.id,
+        is_blocked: isBlockedBool,
+        flow_mode: isBlockedBool ? 'agent' : conv.flow_mode,
+      });
+    }
+
+    recordAuditLog({
+      actorId: req.agentId,
+      actorEmail: req.agentName || "user",
+      action: isBlockedBool ? "block_visitor" : "unblock_visitor",
+      workspaceId: conv.workspace_id,
+      targetTable: "conversations",
+      note: `${isBlockedBool ? "Memblokir" : "Membuka blokir"} visitor "${conv.visitor_name || conv.visitor_id}"`,
+    });
+
+    res.json({ message: isBlockedBool ? "Visitor diblokir" : "Blokir visitor dibuka", is_blocked: isBlockedBool });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/v1/conversations/:id/takeover (first definition - bot handoff)
 router.patch("/:id/takeover", auth, async (req, res) => {
   try {

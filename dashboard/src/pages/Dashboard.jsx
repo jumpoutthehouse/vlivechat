@@ -142,16 +142,20 @@ function getVisitorInitial(conv) {
 
 function StatusDot({ conv, status }) {
   const cStatus = conv?.status || status;
+  const isBlocked  = !!conv?.is_blocked;
   const isResolved = cStatus === "resolved";
   const isMissed   = cStatus === "missed";
-  const isBot      = (cStatus === "open" || cStatus === "queued") && !conv?.assigned_agent_id && conv?.flow_mode !== "agent";
-  const isWaiting  = (cStatus === "open" || cStatus === "queued") && (conv?.flow_mode === "agent") && !conv?.assigned_agent_id;
-  const isAssigned = (cStatus === "assigned" || cStatus === "active" || !!conv?.assigned_agent_id) && !isResolved && !isMissed;
+  const isBot      = !isBlocked && (cStatus === "open" || cStatus === "queued") && !conv?.assigned_agent_id && conv?.flow_mode !== "agent";
+  const isWaiting  = !isBlocked && (cStatus === "open" || cStatus === "queued") && (conv?.flow_mode === "agent") && !conv?.assigned_agent_id;
+  const isAssigned = !isBlocked && (cStatus === "assigned" || cStatus === "active" || !!conv?.assigned_agent_id) && !isResolved && !isMissed;
 
   let color = "bg-slate-600";
   let label = "⚫ Selesai";
 
-  if (isResolved) {
+  if (isBlocked) {
+    color = "bg-red-500";
+    label = "🚫 Diblokir";
+  } else if (isResolved) {
     color = "bg-slate-500";
     label = "⚫ Selesai";
   } else if (isMissed) {
@@ -577,7 +581,8 @@ function ChatPanel({ leftCollapsed, rightCollapsed, onToggleLeft, onToggleRight,
   const activeConv = conversations.find(c => c.id === activeConvId);
 
   // Bot mode: admin cannot type until they take over the chat
-  const isBotMode = wsInfo?.chatbot_enabled !== false &&
+  const isBotMode = !activeConv?.is_blocked && !convDetail?.is_blocked &&
+    wsInfo?.chatbot_enabled !== false &&
     activeConv?.status === "open" &&
     !activeConv?.assigned_agent_id &&
     activeConv?.flow_mode !== "agent" &&
@@ -1118,6 +1123,19 @@ function ChatPanel({ leftCollapsed, rightCollapsed, onToggleLeft, onToggleRight,
                   </span>
                 )}
               </button>
+            </div>
+          )}
+
+          {/* Blocked Visitor Banner */}
+          {(activeConv?.is_blocked || convDetail?.is_blocked) && (
+            <div className="flex items-center justify-between bg-red-950/60 border border-red-700/50 rounded-xl px-3.5 py-2 mb-2 text-xs animate-fade-in">
+              <span className="text-red-200 font-bold flex items-center gap-2">
+                <span>🚫</span>
+                <span>Percakapan Ini Telah Diblokir oleh Administrator</span>
+              </span>
+              <span className="text-[11px] bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1 rounded-lg font-semibold">
+                DIBLOKIR
+              </span>
             </div>
           )}
 
