@@ -67,17 +67,40 @@ export default function Agents() {
     const handleAgentStatusChanged = ({ agentId, status }) => {
       setAgents(prev => prev.map(a => a.id === agentId ? { ...a, status, is_online: status !== "offline" } : a));
     };
+    const handleAgentUpdated = (data) => {
+      if (!data?.agent) return;
+      const updated = data.agent;
+      setAgents(prev => prev.map(a => a.id === updated.id ? { ...a, ...updated } : a));
+      if (updated.id === agent?.id) {
+        const updatedSelf = { ...agent, ...updated };
+        useChatStore.setState({ agent: updatedSelf });
+        localStorage.setItem("vlc_agent", JSON.stringify(updatedSelf));
+      }
+    };
+    const handleAgentAvatarUpdated = ({ agentId, avatarUrl }) => {
+      if (!agentId || !avatarUrl) return;
+      setAgents(prev => prev.map(a => a.id === agentId ? { ...a, avatar_url: avatarUrl } : a));
+      if (agentId === agent?.id) {
+        const updatedSelf = { ...agent, avatar_url: avatarUrl };
+        useChatStore.setState({ agent: updatedSelf });
+        localStorage.setItem("vlc_agent", JSON.stringify(updatedSelf));
+      }
+    };
 
     socket.on("agent:online",         handleAgentOnline);
     socket.on("agent:offline",        handleAgentOffline);
     socket.on("agent:status_changed", handleAgentStatusChanged);
+    socket.on("agent:updated",        handleAgentUpdated);
+    socket.on("agent:avatar_updated",  handleAgentAvatarUpdated);
 
     return () => {
       socket.off("agent:online",         handleAgentOnline);
       socket.off("agent:offline",        handleAgentOffline);
       socket.off("agent:status_changed", handleAgentStatusChanged);
+      socket.off("agent:updated",        handleAgentUpdated);
+      socket.off("agent:avatar_updated",  handleAgentAvatarUpdated);
     };
-  }, [socket]);
+  }, [socket, agent]);
 
 
   async function handleSave() {
@@ -148,8 +171,13 @@ export default function Agents() {
     const fd = new FormData();
     fd.append("avatar", file);
     try {
-      await api.post(`/agents/${agentId}/avatar`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const { data } = await api.post(`/agents/${agentId}/avatar`, fd, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Foto profil diperbarui");
+      if (agentId === agent?.id && data?.avatar_url) {
+        const updatedSelf = { ...agent, avatar_url: data.avatar_url };
+        useChatStore.setState({ agent: updatedSelf });
+        localStorage.setItem("vlc_agent", JSON.stringify(updatedSelf));
+      }
       loadAgents();
     } catch { toast.error("Gagal mengunggah foto"); }
   }

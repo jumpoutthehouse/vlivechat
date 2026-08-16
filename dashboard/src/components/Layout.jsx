@@ -351,6 +351,31 @@ export default function Layout() {
     }
   }, []);
 
+  const socket = useChatStore(s => s.socket);
+  useEffect(() => {
+    if (!socket) return;
+    function onAgentUpdated(data) {
+      if (data?.agent && data.agent.id === agent?.id) {
+        const updated = { ...agent, ...data.agent };
+        localStorage.setItem("vlc_agent", JSON.stringify(updated));
+        useChatStore.setState({ agent: updated });
+      }
+    }
+    function onAvatarUpdated(data) {
+      if (data?.agentId === agent?.id && data.avatarUrl) {
+        const updated = { ...agent, avatar_url: data.avatarUrl };
+        localStorage.setItem("vlc_agent", JSON.stringify(updated));
+        useChatStore.setState({ agent: updated });
+      }
+    }
+    socket.on("agent:updated", onAgentUpdated);
+    socket.on("agent:avatar_updated", onAvatarUpdated);
+    return () => {
+      socket.off("agent:updated", onAgentUpdated);
+      socket.off("agent:avatar_updated", onAvatarUpdated);
+    };
+  }, [socket, agent]);
+
   useEffect(() => {
     function outside(e) {
       if (profileRef.current && !profileRef.current.contains(e.target)) setUserMenuOpen(false);

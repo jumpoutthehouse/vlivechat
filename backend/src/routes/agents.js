@@ -7,6 +7,7 @@ const { pool } = require("../db");
 const { auth, adminOnly, superadminOnly } = require("../middleware/auth");
 
 const { recordAuditLog } = require("../utils/auditLogger");
+const { getOnlineAgents } = require("../redis");
 
 const router = express.Router();
 
@@ -53,7 +54,21 @@ router.get("/", auth, async (req, res) => {
     query += ` ORDER BY role DESC, name ASC`;
 
     const { rows } = await pool.query(query, params);
-    res.json(rows);
+
+    // Cross-check online status with Redis/socket store & requesting agent
+    const onlineIds = wsId ? await getOnlineAgents(wsId) : [];
+    const formattedRows = rows.map(a => {
+      const isSelf = a.id === req.agentId;
+      const isOnlineStore = onlineIds.includes(a.id);
+      const isOnline = a.is_online || isSelf || isOnlineStore;
+      return {
+        ...a,
+        is_online: isOnline,
+        status: isOnline ? "online" : "offline"
+      };
+    });
+
+    res.json(formattedRows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -175,20 +190,33 @@ router.patch("/:id", auth, async (req, res) => {
     );
     if (!rows[0]) return res.status(404).json({ error: "Agent tidak ditemukan" });
 
-    // Emit socket event to notify the updated agent in real-time
+    // Emit socket event to notify updated agent in real-time to dashboard and visitor widget
     try {
       const io = req.app.get("io");
-      if (io && rows[0].permissions !== undefined) {
-        // Emit to the specific agent's socket rooms
-        io.of("/dashboard").emit("agent:permissions_updated", {
-          agentId: rows[0].id,
-          permissions: rows[0].permissions,
-          role: rows[0].role,
-          is_active: rows[0].is_active,
-        });
+      if (io) {
+        io.of("/dashboard").emit("agent:updated", { agent: rows[0] });
+        if (rows[0].workspace_id) {
+          io.of("/dashboard").to(`workspace:${rows[0].workspace_id}`).emit("agent:updated", { agent: rows[0] });
+          // Broadcast to visitor widgets for real-time CS list/avatars update
+          const { rows: agentRows } = await pool.query(
+            `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY is_online DESC, created_at ASC`,
+            [rows[0].workspace_id]
+          );
+          io.of("/livechat").to(`ws:${rows[0].workspace_id}`).emit("agents:update", {
+            agents: agentRows,
+            is_online: agentRows.some(a => a.is_online),
+          });
+        }
+        if (rows[0].permissions !== undefined) {
+          io.of("/dashboard").emit("agent:permissions_updated", {
+            agentId: rows[0].id,
+            permissions: rows[0].permissions,
+            role: rows[0].role,
+            is_active: rows[0].is_active,
+          });
+        }
       }
     } catch (socketErr) {
-      // Non-blocking: socket emit failure doesn't break the response
       console.error("Socket emit error:", socketErr.message);
     }
 
@@ -233,16 +261,30 @@ router.post(
       }
 
       const { rows } = await pool.query(
-        "UPDATE agents SET avatar_url=$1, updated_at=NOW() WHERE id=$2 RETURNING id, avatar_url",
+        "UPDATE agents SET avatar_url=$1, updated_at=NOW() WHERE id=$2 RETURNING id, workspace_id, name, display_name, avatar_url",
         [avatarUrl, req.params.id]
       );
 
-      // Notify dashboard via socket
+      // Notify dashboard & visitor widget via socket in real-time
       const io = req.app.get("io");
-      io.of("/dashboard").emit("agent:avatar_updated", {
-        agentId: req.params.id,
-        avatarUrl,
-      });
+      if (io) {
+        io.of("/dashboard").emit("agent:avatar_updated", {
+          agentId: req.params.id,
+          avatarUrl,
+        });
+        io.of("/dashboard").emit("agent:updated", { agent: rows[0] });
+        if (rows[0]?.workspace_id) {
+          io.of("/dashboard").to(`workspace:${rows[0].workspace_id}`).emit("agent:updated", { agent: rows[0] });
+          const { rows: agentRows } = await pool.query(
+            `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY is_online DESC, created_at ASC`,
+            [rows[0].workspace_id]
+          );
+          io.of("/livechat").to(`ws:${rows[0].workspace_id}`).emit("agents:update", {
+            agents: agentRows,
+            is_online: agentRows.some(a => a.is_online),
+          });
+        }
+      }
 
       res.json(rows[0]);
     } catch (err) {
