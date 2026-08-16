@@ -173,6 +173,9 @@ CREATE TABLE IF NOT EXISTS conversations (
   -- Metadata
   source          VARCHAR(30)  DEFAULT 'widget',         -- widget | direct
   notes           TEXT,                                  -- internal notes
+  is_blocked      BOOLEAN      DEFAULT FALSE,
+  previous_names  TEXT[]       DEFAULT '{}',
+  cs_handoff_at   TIMESTAMPTZ,
   
   created_at      TIMESTAMPTZ  DEFAULT NOW(),
   updated_at      TIMESTAMPTZ  DEFAULT NOW()
@@ -183,6 +186,10 @@ CREATE INDEX IF NOT EXISTS idx_conversations_visitor   ON conversations(visitor_
 CREATE INDEX IF NOT EXISTS idx_conversations_status    ON conversations(status);
 CREATE INDEX IF NOT EXISTS idx_conversations_agent     ON conversations(assigned_agent_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_created   ON conversations(created_at DESC);
+-- Partial unique index: only one active (non-resolved) conversation per visitor per workspace
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_active_visitor_workspace
+  ON conversations (visitor_id, workspace_id)
+  WHERE status != 'resolved';
 
 -- =============================================
 -- MESSAGES
