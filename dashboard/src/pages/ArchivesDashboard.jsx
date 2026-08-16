@@ -19,6 +19,7 @@ import useChatStore from "../store/chatStore";
 import toast from "react-hot-toast";
 import VisitorInfoPanel from "../components/VisitorInfoPanel";
 import BrandSwitcherDropdown from "../components/BrandSwitcherDropdown";
+import Avatar from "../components/Avatar";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
@@ -582,8 +583,14 @@ export default function ArchivesDashboard() {
 
                 return (
                   <div key={msg.id || i} className={`flex items-start gap-2.5 ${isVisitor ? "" : "flex-row-reverse"}`}>
-                    <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1">
-                      {isVisitor ? (convDetail.visitor_name || "V").charAt(0).toUpperCase() : (msg.sender_display_name || msg.sender_name || "CS").charAt(0).toUpperCase()}
+                    <div className="flex-shrink-0 mt-1">
+                      <Avatar
+                        src={isVisitor ? null : (msg.sender_avatar || (msg.sender_id === agent?.id ? agent?.avatar_url : null))}
+                        name={isVisitor ? (convDetail.visitor_name || "V") : (msg.sender_display_name || msg.sender_name || "CS")}
+                        bg={isVisitor ? "#334155" : "#4F46E5"}
+                        size="w-7 h-7"
+                        textClass="text-xs"
+                      />
                     </div>
                     <div className={`max-w-[70%] flex flex-col ${isVisitor ? "items-start" : "items-end"}`}>
                       <div className="text-[10px] text-slate-400 mb-1 px-1 font-semibold">

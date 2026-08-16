@@ -30,6 +30,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { id } from "date-fns/locale";
 import VisitorInfoPanel from "../components/VisitorInfoPanel";
 import ConfirmModal from "../components/ConfirmModal";
+import Avatar from "../components/Avatar";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 const API_BASE   = import.meta.env.VITE_SOCKET_URL || SERVER_URL;
@@ -1512,14 +1513,20 @@ function MessageBubble({ msg, agent, activeConv, onImageClick }) {
 
       {/* Avatar for agent or bot (right side) */}
       {(isAgent || isBot) && (
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1 shadow-sm"
-             style={{ background: isBot ? "#334155" : "#4F46E5" }}>
-          {isBot
-            ? "B"
-            : msg.sender_avatar
-            ? <img src={getFileUrl(msg.sender_avatar)} alt="" className="w-7 h-7 rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            : (msg.sender_display_name || msg.sender_name || "A").charAt(0).toUpperCase()
-          }
+        <div className="flex-shrink-0 mt-1">
+          {isBot ? (
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm bg-slate-700">
+              B
+            </div>
+          ) : (
+            <Avatar
+              src={msg.sender_avatar || (isMe ? agent?.avatar_url : null)}
+              name={msg.sender_display_name || msg.sender_name || agent?.display_name || agent?.name}
+              bg={agent?.avatar_bg || "#4F46E5"}
+              size="w-7 h-7"
+              textClass="text-xs"
+            />
+          )}
         </div>
       )}
     </div>

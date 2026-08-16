@@ -175,8 +175,12 @@ function registerDashboardSocket(dashboardNsp, visitorNsp) {
         }
 
         // Broadcast to dashboard (all agents in conversation)
+        const msgPayload = {
+          ...msg,
+          sender_avatar: agentAvatar,
+        };
         dashboardNsp.to(`conv:${conversationId}`).emit("agent:message", {
-          conversationId, message: msg,
+          conversationId, message: msgPayload,
         });
 
         // Send to visitor (unless internal note)
