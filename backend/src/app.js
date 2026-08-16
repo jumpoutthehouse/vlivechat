@@ -50,14 +50,7 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    if (
-      allowedOrigins.includes(origin) ||
-      /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)
-    ) {
-      return cb(null, true);
-    }
-    cb(new Error(`Not allowed by CORS: ${origin}`));
+    return cb(null, true);
   },
   credentials: true,
 };
@@ -71,6 +64,15 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+// ── Root & Healthcheck ─────────────────────────────────────────
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "vlivechat Backend Server running", version: "1.0.0" });
+});
+
+app.get("/api/v1", (req, res) => {
+  res.json({ status: "ok", message: "vlivechat API v1 running", version: "1.0.0" });
+});
 
 // ── Static uploads ─────────────────────────────────────────────
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, "../uploads");
