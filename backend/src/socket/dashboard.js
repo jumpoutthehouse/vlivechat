@@ -406,13 +406,22 @@ function registerDashboardSocket(dashboardNsp, visitorNsp) {
 async function broadcastAgentsToWidget(visitorNsp, workspaceId) {
   if (!workspaceId || !visitorNsp) return;
   try {
+    const { getOnlineAgents } = require("../redis");
+    const onlineIds = await getOnlineAgents(workspaceId);
+
     const { rows: agentRows } = await pool.query(
-      `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY is_online DESC, created_at ASC`,
+      `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY created_at ASC`,
       [workspaceId]
     );
-    const onlineCount = agentRows.filter(a => a.is_online).length;
+
+    const formattedAgents = agentRows.map(a => {
+      const isOnline = a.is_online || onlineIds.includes(a.id);
+      return { ...a, is_online: isOnline };
+    });
+
+    const onlineCount = formattedAgents.filter(a => a.is_online).length;
     visitorNsp.to(`ws:${workspaceId}`).emit("agents:update", {
-      agents: agentRows,
+      agents: formattedAgents,
       is_online: onlineCount > 0,
     });
   } catch (err) {

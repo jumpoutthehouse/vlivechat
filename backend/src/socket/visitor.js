@@ -52,13 +52,20 @@ function registerVisitorSocket(visitorNsp, dashboardNsp) {
 
     // Send initial agent list & online status to visitor widget
     try {
+      const { getOnlineAgents } = require("../redis");
+      const onlineIds = await getOnlineAgents(workspace.id);
+
       const { rows: agentRows } = await pool.query(
-        `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY is_online DESC, created_at ASC`,
+        `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY created_at ASC`,
         [workspace.id]
       );
+      const formattedAgents = agentRows.map(a => {
+        const isOnline = a.is_online || onlineIds.includes(a.id);
+        return { ...a, is_online: isOnline };
+      });
       socket.emit("agents:update", {
-        agents: agentRows,
-        is_online: agentRows.filter(a => a.is_online).length > 0,
+        agents: formattedAgents,
+        is_online: formattedAgents.some(a => a.is_online),
       });
     } catch (e) {}
 
