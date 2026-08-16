@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>vlivechat — Demo Widget</title>
+<link rel="icon" type="image/png" href="favicon.png"/>
+<link rel="shortcut icon" type="image/png" href="vlivechat-favicon.png"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f0f4f8;min-height:100vh}
+.demo-page{
+  max-width:900px;margin:0 auto;padding:40px 20px;
+}
+.demo-hero{
+  text-align:center;padding:60px 20px 40px;
+}
+.demo-hero h1{font-size:2.5rem;font-weight:900;color:#1e3a5f;margin-bottom:12px}
+.demo-hero p{color:#64748b;font-size:1.1rem;max-width:500px;margin:0 auto}
+.demo-card{
+  background:white;border-radius:16px;padding:28px;margin-top:32px;
+  box-shadow:0 2px 20px rgba(0,0,0,0.08);border:1px solid #e2e8f0;
+}
+.demo-card h2{font-size:1.1rem;font-weight:700;color:#1e3a5f;margin-bottom:16px}
+.code-block{
+  background:#1e2d3d;color:#e2e8f0;padding:16px;border-radius:10px;
+  font-family:monospace;font-size:13px;line-height:1.7;overflow-x:auto;
+  position:relative;
+}
+.copy-btn{
+  position:absolute;top:10px;right:10px;
+  background:rgba(255,255,255,0.15);border:none;color:white;
+  padding:4px 10px;border-radius:5px;cursor:pointer;font-size:11px;
+  transition:background .2s;
+}
+.copy-btn:hover{background:rgba(255,255,255,0.3)}
+.demo-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
+.demo-link{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 20px;border-radius:8px;text-decoration:none;
+  font-weight:600;font-size:14px;transition:all .2s;
+}
+.demo-link.primary{background:#1e3a5f;color:white}
+.demo-link.primary:hover{background:#2d5086;transform:translateY(-2px)}
+.demo-link.secondary{background:#f1f5f9;color:#1e3a5f;border:1px solid #cbd5e1}
+.demo-link.secondary:hover{background:#e2e8f0}
+.badge{
+  display:inline-block;padding:3px 10px;border-radius:20px;
+  font-size:11px;font-weight:700;background:#dcfce7;color:#166534;margin-bottom:8px;
+}
+</style>
+</head>
+<body>
+<div class="demo-page">
+  <div class="demo-hero">
+    <div style="font-size:48px;margin-bottom:16px">💬</div>
+    <h1>vlivechat Demo</h1>
+    <p>Widget chat siap embed di website Anda. Klik tombol chat di sudut kanan bawah untuk mencoba!</p>
+  </div>
+
+  <div class="demo-card">
+    <span class="badge">✅ Direct URL</span>
+    <h2>Akses Langsung (Direct URL)</h2>
+    <p style="color:#64748b;margin-bottom:12px;font-size:13px">Buka halaman chat secara langsung tanpa embed.</p>
+    <div class="demo-links">
+      <a class="demo-link primary" href="livechat-widget.html?w=demo_workspace&apiBase=http://localhost:3001" target="_blank">
+        🔗 Buka Widget Direct
+      </a>
+    </div>
+  </div>
+
+  <div class="demo-card" style="margin-top:16px">
+    <span class="badge">📋 Embed Script</span>
+    <h2>Cara Embed di Website Anda</h2>
+    <p style="color:#64748b;margin-bottom:12px;font-size:13px">Tambahkan kode ini sebelum tag <code>&lt;/body&gt;</code> di website Anda.</p>
+    <div class="code-block" id="embed-code">
+      <button class="copy-btn" onclick="copyCode()">Copy</button>
+&lt;!-- vlivechat Widget --&gt;
+&lt;script&gt;
+  window.VLiveChat = {
+    workspace: 'demo_workspace',         // Ganti dengan workspace code Anda
+    apiBase:   'http://localhost:3001',  // Ganti dengan URL server Anda
+  };
+&lt;/script&gt;
+&lt;script src="http://localhost:3000/widget/widget.js" async&gt;&lt;/script&gt;</div>
+  </div>
+
+  <div class="demo-card" style="margin-top:16px">
+    <span class="badge">🎯 Admin Dashboard</span>
+    <h2>Akses Dashboard Admin</h2>
+    <p style="color:#64748b;margin-bottom:12px;font-size:13px">Login ke panel admin untuk menerima dan mengelola chat.</p>
+    <div class="demo-links">
+      <a class="demo-link primary" href="http://localhost:5173" target="_blank">🚀 Buka Dashboard</a>
+      <a class="demo-link secondary" href="#" target="_blank">📚 Dokumentasi</a>
+    </div>
+    <div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+      <p style="font-size:12px;color:#64748b"><strong>Demo credentials:</strong></p>
+      <p style="font-size:12px;color:#374151;margin-top:4px">Superadmin: superadmin@vlivechat.com / SuperAdmin@2024!</p>
+      <p style="font-size:12px;color:#374151">Demo Admin: admin@demo.com / Admin@2024!</p>
+    </div>
+  </div>
+</div>
+
+<!-- vlivechat Widget Embed -->
+<script>
+  window.VLiveChat = {
+    workspace: 'demo_workspace',
+    apiBase:   'http://localhost:3001',
+    widgetUrl: 'livechat-widget.html',
+  };
+</script>
+<script src="widget.js"></script>
+
+<script>
+function copyCode() {
+  const code = `<!-- vlivechat Widget -->
+<script>
+  window.VLiveChat = {
+    workspace: 'demo_workspace',
+    apiBase:   'http://localhost:3001',
+  };
+<\/script>
+<script src="http://localhost:3001/widget/widget.js" async><\/script>`;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.querySelector(".copy-btn");
+    btn.textContent = "✅ Copied!";
+    setTimeout(() => btn.textContent = "Copy", 2000);
+  });
+}
+</script>
+</body>
+</html>

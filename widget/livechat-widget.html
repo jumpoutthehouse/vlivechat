@@ -1,0 +1,3247 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>vlivechat Widget</title>
+  <link id="vlc-favicon" rel="icon" type="image/png" href="favicon.png" />
+  <link rel="shortcut icon" type="image/png" href="vlivechat-favicon.png" />
+  <link rel="apple-touch-icon" href="favicon.png" />
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    if (typeof io === "undefined") {
+      const apiBaseUrl = new URLSearchParams(location.search).get("apiBase") || "http://localhost:3001";
+      document.write('<script src="' + apiBaseUrl + '/socket.io/socket.io.js"><\/script>');
+    }
+  </script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    :root {
+      --primary: #1e3a5f;
+      --secondary: #e53e3e;
+      --bg-dark: #0f1923;
+      --bg-card: #1a2535;
+      --bg-input: #243044;
+      --text-primary: #f0f4f8;
+      --text-secondary: #8ba3c1;
+      --text-muted: #5a7a9a;
+      --border: #2a3f5f;
+      --bubble-visitor: #2a3f5f;
+      --bubble-agent: #1e4080;
+      --bubble-bot: #162d4a;
+      --btn-radius: 8px;
+      --radius-lg: 16px;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+      background: transparent
+    }
+
+    body {
+      font-family: var(--font);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────── */
+    #widget {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: var(--bg-dark);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    /* Direct Chat Standalone Page (Full tab browser mode) */
+    body:not(.embedded) {
+      background: #090e1a;
+      background-image: radial-gradient(ellipse at top, rgba(30, 58, 95, 0.35), transparent 70%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    body:not(.embedded) #widget {
+      width: 100%;
+      max-width: 440px;
+      height: 92vh;
+      max-height: 720px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+    }
+
+    /* When embedded as iframe */
+    body.embedded #widget {
+      border-radius: 0
+    }
+
+    /* ── HEADER ─────────────────────────────────────────────────── */
+    #header {
+      background: var(--primary);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      position: relative;
+      min-height: 68px;
+    }
+
+    #header-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      color: white;
+    }
+
+    #header-info {
+      flex: 1;
+      min-width: 0
+    }
+
+    #header-brand {
+      font-weight: 700;
+      font-size: 15px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    #header-status {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.75);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 2px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #4ade80;
+      display: inline-block;
+      flex-shrink: 0;
+      transition: background 0.3s
+    }
+
+    .status-dot.online {
+      background: #4ade80
+    }
+
+    .status-dot.bot {
+      background: #60a5fa
+    }
+
+    .status-dot.offline {
+      background: #94a3b8
+    }
+
+    #header-end-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all .2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    #header-end-btn:hover {
+      background: rgba(239, 68, 68, 0.6)
+    }
+
+    #header-minimize {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 18px;
+      line-height: 1;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+
+    /* Hide minimize button when NOT in embedded iframe mode (direct URL / standalone) */
+    body:not(.embedded) #header-minimize {
+      display: none !important;
+    }
+
+    /* ── SCREENS ────────────────────────────────────────────────── */
+    .screen {
+      flex: 1;
+      display: none !important;
+      flex-direction: column;
+      overflow: hidden
+    }
+
+    .screen.active {
+      display: flex !important
+    }
+
+    /* ── PRE-CHAT SCREEN ────────────────────────────────────────── */
+    #screen-prechat.active {
+      display: flex !important;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px 16px;
+      gap: 12px;
+      background: var(--bg-dark);
+      overflow-y: auto;
+    }
+
+    .cs-avatars-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 4px 0 8px;
+      width: 100%;
+      max-width: 320px;
+      overflow-x: auto;
+    }
+
+    .cs-avatar-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      max-width: 68px;
+    }
+
+    .cs-avatar-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary);
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .cs-avatar-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%
+    }
+
+    .cs-avatar-dot {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid #0f172a;
+      background: #22c55e;
+      z-index: 10;
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.8);
+    }
+
+    .cs-avatar-dot.offline {
+      background: #64748b;
+      box-shadow: none
+    }
+
+    .cs-avatar-name {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 64px;
+    }
+
+    .prechat-logo-wrap {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      background: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 900;
+      color: white;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .prechat-logo-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%
+    }
+
+    .prechat-title {
+      font-size: 16px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text-primary)
+    }
+
+    .prechat-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-align: center;
+      max-width: 280px
+    }
+
+    .prechat-form {
+      width: 100%;
+      max-width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-sizing: border-box
+    }
+
+    .prechat-field label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      display: block;
+      font-weight: 600
+    }
+
+    .prechat-field input {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--btn-radius);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+      transition: border .2s;
+      box-sizing: border-box;
+    }
+
+    .prechat-field input:focus {
+      border-color: var(--primary)
+    }
+
+    .prechat-field input::placeholder {
+      color: var(--text-muted)
+    }
+
+    #prechat-start-btn {
+      width: 100%;
+      max-width: 300px;
+      padding: 11px 12px;
+      border-radius: var(--btn-radius);
+      border: none;
+      cursor: pointer;
+      background: var(--primary);
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      transition: all .2s;
+      margin-top: 4px;
+      box-sizing: border-box;
+    }
+
+    #prechat-start-btn:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px)
+    }
+
+    #prechat-start-btn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none
+    }
+
+    /* ── ANNOUNCEMENT CARD (prechat screen only) ─────────────────── */
+    #prechat-announcement-container {
+      width: 100%;
+      max-width: 300px;
+      box-sizing: border-box;
+    }
+
+    .ann-card {
+      background: linear-gradient(135deg, rgba(30, 58, 138, 0.5), rgba(79, 70, 229, 0.38));
+      border: 1px solid rgba(129, 140, 248, 0.35);
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .ann-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+
+    .ann-icon {
+      font-size: 15px;
+      flex-shrink: 0
+    }
+
+    .ann-body {
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.5;
+      word-break: break-all;
+      margin-bottom: 10px;
+    }
+
+    .ann-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 13px;
+      border-radius: 8px;
+      text-decoration: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      transition: filter .15s ease, transform .15s ease;
+    }
+
+    .ann-btn:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px)
+    }
+
+
+    /* ── CHAT SCREEN ─────────────────────────────────────────────── */
+    #screen-chat.active {
+      flex: 1;
+      display: flex !important;
+      flex-direction: column;
+      overflow: hidden
+    }
+
+    /* Messages area */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      /* scroll-behavior is intentionally NOT set here — controlled via JS
+     to prevent animation-from-top when restoring/starting chat */
+    }
+
+    #messages::-webkit-scrollbar {
+      width: 4px
+    }
+
+    #messages::-webkit-scrollbar-track {
+      background: transparent
+    }
+
+    #messages::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px
+    }
+
+    /* Message groups */
+    .msg-row {
+      display: flex;
+      gap: 8px;
+      max-width: 100%;
+      animation: msgIn .25s ease
+    }
+
+    .msg-row.visitor {
+      flex-direction: row-reverse
+    }
+
+    .msg-row.system {
+      justify-content: center
+    }
+
+    @keyframes msgIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .msg-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: white;
+      overflow: hidden;
+      align-self: flex-start;
+      margin-top: 2px;
+    }
+
+    .msg-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%
+    }
+
+    .msg-body {
+      display: flex;
+      flex-direction: column;
+      max-width: 75%;
+      gap: 2px
+    }
+
+    .msg-row.visitor .msg-body {
+      align-items: flex-end
+    }
+
+    .msg-bubble {
+      padding: 9px 13px;
+      border-radius: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
+      position: relative;
+    }
+
+    .msg-row.agent .msg-bubble {
+      background: var(--bubble-agent);
+      border-bottom-left-radius: 4px
+    }
+
+    .msg-row.bot .msg-bubble {
+      background: var(--bubble-bot);
+      border-bottom-left-radius: 4px
+    }
+
+    .msg-row.visitor .msg-bubble {
+      background: var(--bubble-visitor, var(--primary));
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2)
+    }
+
+    .msg-row.system .msg-bubble {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-secondary);
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      text-align: center;
+    }
+
+    /* Past Session Block & Spacing Dividers */
+    .past-session-block {
+      margin-bottom: 24px;
+      padding-bottom: 14px;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .session-date-divider {
+      margin: 16px 0 10px !important;
+      display: flex;
+      justify-content: center;
+    }
+
+    .session-ended-pill {
+      margin: 12px 0 16px !important;
+      display: flex;
+      justify-content: center;
+    }
+
+    .msg-sender-name {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+      font-weight: 600;
+      padding: 0 2px
+    }
+
+    .msg-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      padding: 0 2px;
+      display: flex;
+      align-items: center;
+      gap: 3px
+    }
+
+    .msg-row.visitor .msg-time {
+      flex-direction: row-reverse
+    }
+
+    /* Read receipts */
+    .read-receipt {
+      font-size: 10px;
+      color: var(--text-muted)
+    }
+
+    .read-receipt.read {
+      color: #60a5fa
+    }
+
+    .read-receipt.delivered {
+      color: var(--text-muted)
+    }
+
+    /* Image messages */
+    .msg-image {
+      max-width: 200px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: opacity .2s;
+      display: block;
+    }
+
+    .msg-image:hover {
+      opacity: .85
+    }
+
+    /* File messages */
+    .msg-file {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.07);
+      padding: 10px 12px;
+      border-radius: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .msg-file-icon {
+      font-size: 20px;
+      flex-shrink: 0
+    }
+
+    .msg-file-info {
+      min-width: 0
+    }
+
+    .msg-file-name {
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .msg-file-size {
+      font-size: 10px;
+      color: var(--text-muted)
+    }
+
+    /* ── FLOW BUTTONS ──────────────────────────────────────────── */
+    #buttons-area {
+      padding: 0 16px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .flow-btn {
+      padding: 8px 14px;
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all .18s;
+      white-space: nowrap;
+    }
+
+    .flow-btn:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(30, 58, 95, 0.5);
+    }
+
+    .flow-btn:active {
+      transform: translateY(0)
+    }
+
+    .flow-btn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none
+    }
+
+    /* ── TYPING INDICATOR ──────────────────────────────────────── */
+    #typing-indicator {
+      padding: 4px 16px 8px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    #typing-indicator.show {
+      display: flex
+    }
+
+    .typing-dots {
+      display: flex;
+      gap: 4px
+    }
+
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: typingBounce 1.2s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(2) {
+      animation-delay: .2s
+    }
+
+    .typing-dot:nth-child(3) {
+      animation-delay: .4s
+    }
+
+    @keyframes typingBounce {
+
+      0%,
+      80%,
+      100% {
+        transform: translateY(0)
+      }
+
+      40% {
+        transform: translateY(-5px)
+      }
+    }
+
+    .typing-text {
+      font-size: 11px;
+      color: var(--text-muted)
+    }
+
+    /* ── NEW MESSAGE SCROLL PILL ────────────────────────────────── */
+    #new-msg-pill {
+      position: absolute;
+      bottom: 75px;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: var(--primary, #059669);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    #new-msg-pill.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    #new-msg-pill:hover {
+      filter: brightness(1.1);
+      transform: translateX(-50%) translateY(-2px);
+    }
+
+    /* ── INPUT AREA ─────────────────────────────────────────────── */
+    #input-area {
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 6px 10px;
+      transition: all .2s;
+    }
+
+    #input-wrap:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.3)
+    }
+
+    #file-btn,
+    #emoji-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--text-muted);
+      transition: color .2s;
+      flex-shrink: 0;
+      font-size: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #file-btn:hover,
+    #emoji-btn:hover {
+      color: var(--text-primary)
+    }
+
+    #msg-input {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      font-size: 13px;
+      resize: none;
+      outline: none;
+      max-height: 120px;
+      height: 24px;
+      font-family: var(--font);
+      line-height: 1.4;
+      padding: 3px 0;
+      overflow-y: hidden;
+    }
+
+    #msg-input::-webkit-scrollbar {
+      width: 4px
+    }
+
+    #msg-input::-webkit-scrollbar-track {
+      background: transparent
+    }
+
+    #msg-input::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 4px
+    }
+
+    #msg-input::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.4)
+    }
+
+    #msg-input::placeholder {
+      color: var(--text-muted)
+    }
+
+    #msg-input:disabled {
+      opacity: .5;
+      cursor: not-allowed
+    }
+
+    #send-btn {
+      background: var(--primary);
+      border: none;
+      border-radius: 10px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all .2s;
+      flex-shrink: 0;
+    }
+
+    #send-btn:hover:not(:disabled) {
+      filter: brightness(1.2);
+      transform: scale(1.05)
+    }
+
+    #send-btn:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+      transform: none
+    }
+
+    #send-btn svg {
+      fill: white;
+      width: 15px;
+      height: 15px;
+      margin-left: 1px
+    }
+
+    #file-input {
+      display: none
+    }
+
+    .input-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 6px
+    }
+
+    /* ── POST-CHAT SURVEY SCREEN ────────────────────────────────── */
+    #screen-survey.active {
+      display: flex !important;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 16px 14px;
+      gap: 10px;
+      background: var(--bg-dark);
+      overflow-y: auto;
+    }
+
+    .survey-title {
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text-primary)
+    }
+
+    .survey-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: 2px
+    }
+
+    .survey-card {
+      width: 100%;
+      max-width: 320px;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .survey-q {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-secondary)
+    }
+
+    .survey-options {
+      display: flex;
+      gap: 8px
+    }
+
+    .survey-opt {
+      flex: 1;
+      padding: 7px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all .2s;
+      text-align: center;
+    }
+
+    .survey-opt:hover {
+      border-color: var(--primary);
+      background: rgba(30, 58, 95, 0.3)
+    }
+
+    .survey-opt.selected {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white
+    }
+
+    .rating-stars {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      font-size: 24px;
+      padding: 4px 0
+    }
+
+    .star {
+      cursor: pointer;
+      transition: all .15s;
+      filter: grayscale(1);
+      opacity: .35
+    }
+
+    .star:hover,
+    .star.active {
+      filter: none;
+      opacity: 1;
+      transform: scale(1.2)
+    }
+
+    .survey-comment {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 12px;
+      resize: none;
+      outline: none;
+      font-family: var(--font);
+      transition: border .2s;
+    }
+
+    .survey-comment:focus {
+      border-color: var(--primary)
+    }
+
+    .survey-submit {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background: var(--primary);
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      transition: all .2s;
+    }
+
+    .survey-submit:hover {
+      filter: brightness(1.15)
+    }
+
+    .survey-skip {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      text-decoration: underline;
+      padding: 4px;
+    }
+
+    /* ── TOAST ──────────────────────────────────────────────────── */
+    #toast {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    #toast.show {
+      opacity: 1
+    }
+
+    /* Lightbox for images */
+    #lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.9);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #lightbox.show {
+      display: flex
+    }
+
+    #lightbox img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 8px
+    }
+
+    #lightbox-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      color: white;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="widget">
+    <!-- HEADER -->
+    <div id="header">
+      <div id="header-logo">V</div>
+      <div id="header-info">
+        <div id="header-brand">vlivechat</div>
+        <div id="header-status">
+          <span class="status-dot" id="status-dot"></span>
+          <span id="status-text">Menghubungkan...</span>
+        </div>
+      </div>
+      <button id="header-end-btn" onclick="showEndConfirm()" style="display:none">Akhiri Chat</button>
+      <button id="header-minimize" onclick="minimizeWidget()" title="Minimize">−</button>
+    </div>
+
+    <!-- SCREEN: PRE-CHAT -->
+    <div class="screen active" id="screen-prechat">
+      <div class="cs-avatars-bar" id="cs-avatars-bar"></div>
+      <div class="prechat-logo-wrap" id="prechat-logo-wrap">V</div>
+      <div class="prechat-title" id="prechat-title">Halo! Ada yang bisa kami bantu?</div>
+      <div class="prechat-sub" id="prechat-sub">Tim kami siap membantu Anda 24/7.</div>
+      <div id="prechat-announcement-container" style="display:none;width:100%;box-sizing:border-box"></div>
+      <div class="prechat-form" id="prechat-form">
+        <!-- Dynamically generated from flow config -->
+      </div>
+      <button id="prechat-start-btn" onclick="startChat()">Mulai Chat</button>
+    </div>
+
+    <!-- SCREEN: CHAT -->
+    <div class="screen" id="screen-chat">
+      <!-- No announcement card here — only shows on pre-chat screen -->
+      <div id="messages"></div>
+
+      <!-- Flow buttons -->
+      <div id="buttons-area"></div>
+
+      <!-- Typing indicator -->
+      <div id="typing-indicator">
+        <div class="typing-dots">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+        <span class="typing-text">Agent sedang mengetik...</span>
+      </div>
+
+      <!-- Input area -->
+      <div id="input-area" style="position:relative">
+        <!-- Rich Emoji Popover -->
+        <div id="emoji-picker-popover"
+          style="display:none;position:absolute;bottom:65px;left:10px;right:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:0 12px 32px rgba(0,0,0,0.5);z-index:100">
+          <div
+            style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center border-bottom:1px solid var(--border);pb-2">
+            <span>😊 PILIH EMOJI</span>
+            <button onclick="toggleWidgetEmoji()"
+              style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px">✕</button>
+          </div>
+          <div style="margin-bottom:8px">
+            <input type="text" id="widget-emoji-search" placeholder="🔍 Cari emoji..." oninput="filterWidgetEmojis()"
+              style="width:100%;background:var(--bg-main);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--text-main);outline:none">
+          </div>
+          <div id="widget-emoji-categories"
+            style="display:flex;justify-content:space-between;gap:2px;margin-bottom:8px;background:var(--bg-main);padding:4px;border-radius:8px;overflow-x:auto">
+            <button type="button" onclick="selectWidgetEmojiCategory('smileys')"
+              style="background:none;border:none;cursor:pointer;font-size:14px;padding:4px">😀</button>
+            <button type="button" onclick="selectWidgetEmojiCategory('gestures')"
+              style="background:none;border:none;cursor:pointer;font-size:14px;padding:4px">🙋‍♂️</button>
+            <button type="button" onclick="selectWidgetEmojiCategory('animals')"
+              style="background:none;border:none;cursor:pointer;font-size:14px;padding:4px">🐶</button>
+            <button type="button" onclick="selectWidgetEmojiCategory('food')"
+              style="background:none;border:none;cursor:pointer;font-size:14px;padding:4px">🍕</button>
+            <button type="button" onclick="selectWidgetEmojiCategory('activities')"
+              style="background:none;border:none;cursor:pointer;font-size:14px;padding:4px">⚽</button>
+            <button type="button" onclick="selectWidgetEmojiCategory('travel')"
+              style="background:none;border:none;cursor:pointer;font-size:14px;padding:4px">🚗</button>
+            <button type="button" onclick="selectWidgetEmojiCategory('symbols')"
+              style="background:none;border:none;cursor:pointer;font-size:14px;padding:4px">💡</button>
+          </div>
+          <div id="widget-emoji-grid"
+            style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;max-height:170px;overflow-y:auto;font-size:18px;text-align:center">
+          </div>
+        </div>
+
+        <!-- Multi-Photo / File Preview Modal for Widget -->
+        <div id="widget-upload-preview-modal"
+          style="display:none;position:absolute;bottom:65px;left:10px;right:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:0 12px 32px rgba(0,0,0,0.5);z-index:110">
+          <div
+            style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+            <span id="widget-preview-title">📁 PREVIEW LAMPIRAN</span>
+            <button onclick="cancelWidgetUpload()"
+              style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px">Batal ✕</button>
+          </div>
+          <div id="widget-preview-grid"
+            style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="widget-upload-caption" placeholder="Tambah keterangan (opsional)..."
+              style="flex:1;background:var(--bg-main);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--text-main);outline:none">
+            <button id="widget-send-batch-btn" onclick="confirmWidgetBatchUpload()"
+              style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">📤
+              Kirim</button>
+          </div>
+        </div>
+
+        <!-- Blocked Visitor Locked Mode Banner -->
+        <div id="blocked-locked-banner"
+          style="display:none;background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.4);border-radius:14px;padding:14px 16px;text-align:center;color:#ef4444;font-size:13px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.3);align-items:center;justify-content:center;gap:8px">
+          <span>🚫 Akses Chat Diblokir oleh Administrator</span>
+        </div>
+
+        <!-- Floating New Message Scroll Pill -->
+        <div id="new-msg-pill" onclick="scrollWidgetToBottom(true)">
+          <span>⬇ Pesan Baru</span>
+          <span id="new-msg-badge" style="background:rgba(255,255,255,0.25);padding:1px 6px;border-radius:10px;font-size:10px">1</span>
+        </div>
+
+        <div id="input-wrap">
+          <button id="file-btn" onclick="triggerWidgetFileUpload()" title="Lampirkan file">📎</button>
+          <button id="emoji-btn" onclick="toggleWidgetEmoji()" title="Emoji"
+            style="background:none;border:none;cursor:pointer;padding:4px;color:var(--text-muted);font-size:18px">😊</button>
+          <textarea id="msg-input" rows="1" placeholder="Tulis pesan..." disabled
+            oninput="autoResize(this);handleTyping()" onkeydown="handleKeydown(event)"></textarea>
+          <button id="send-btn" onclick="sendMessage()" disabled title="Kirim">
+            <svg viewBox="0 0 24 24">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        </div>
+        <input type="file" id="file-input" multiple onchange="handleWidgetFileSelection(event)"
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,audio/*,video/mp4" />
+        <div class="input-hint" id="input-hint"></div>
+      </div>
+    </div>
+
+    <!-- SCREEN: SURVEY -->
+    <div class="screen" id="screen-survey">
+      <div class="survey-title">⭐ Terima kasih sudah menghubungi kami!</div>
+      <div class="survey-sub">Bantu kami dengan memberikan penilaian Anda.</div>
+      <div class="survey-card">
+        <div>
+          <div class="survey-q">Apakah pelayanan kami memuaskan?</div>
+          <div class="survey-options">
+            <button class="survey-opt" onclick="selectSurvey('satisfaction','yes',this)">✅ Ya</button>
+            <button class="survey-opt" onclick="selectSurvey('satisfaction','no',this)">❌ Tidak</button>
+          </div>
+        </div>
+        <div>
+          <div class="survey-q">Apakah masalah Anda terselesaikan?</div>
+          <div class="survey-options">
+            <button class="survey-opt" onclick="selectSurvey('resolved','yes',this)">✅ Ya</button>
+            <button class="survey-opt" onclick="selectSurvey('resolved','no',this)">❌ Tidak</button>
+          </div>
+        </div>
+        <div>
+          <div class="survey-q">Berikan rating untuk layanan kami:</div>
+          <div class="rating-stars" id="rating-stars">
+            <span class="star" onclick="setRating(1)" data-v="1">⭐</span>
+            <span class="star" onclick="setRating(2)" data-v="2">⭐</span>
+            <span class="star" onclick="setRating(3)" data-v="3">⭐</span>
+            <span class="star" onclick="setRating(4)" data-v="4">⭐</span>
+            <span class="star" onclick="setRating(5)" data-v="5">⭐</span>
+          </div>
+        </div>
+        <div>
+          <div class="survey-q">Komentar (opsional):</div>
+          <textarea class="survey-comment" id="survey-comment" rows="2"
+            placeholder="Sampaikan saran atau keluhan Anda..."></textarea>
+        </div>
+        <button class="survey-submit" onclick="submitSurvey()">Kirim Penilaian</button>
+      </div>
+      <button class="survey-skip" onclick="skipSurvey()">Lewati</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" onclick="closeLightbox()">
+    <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+    <img id="lightbox-img" src="" alt="Preview" />
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    // vlivechat Widget Script
+    // ═══════════════════════════════════════════════════════════════
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    const urlParams = new URLSearchParams(location.search);
+    const WORKSPACE = urlParams.get("w") || "";
+    const PAGE = urlParams.get("page") || location.href;
+    const REF = urlParams.get("ref") || "";
+    const API_BASE = urlParams.get("apiBase") || "http://localhost:3001";
+    const IS_EMBED = urlParams.get("embed") === "1";
+    const VISITOR_ID = getVisitorId();
+
+    if (IS_EMBED) document.body.classList.add("embedded");
+
+    // ── State ────────────────────────────────────────────────────────
+    let socket = null;
+    let convId = null;
+    let branding = {};
+    let flowConfig = null;
+    let flowState = { nodeId: "main", data: {}, log: [], mode: "menu" };
+    let agentMode = false;       // true when connected to human agent
+    let hasActiveSession = false;       // true when chat session is active / history restored
+    let isBlockedVisitor = false;       // true when visitor is blocked by admin
+    let currentScreen = "prechat";   // active screen: prechat, chat, survey
+    let isOnline = false;
+    let typingTimer = null;
+    let lastMsgId = null;
+    let surveyData = { satisfaction: null, resolved: null, rating: null };
+    let widgetPreviousSessions = []; // WhatsApp-style: list of resolved session {id, created_at} for lazy load on scroll-top
+    let isLoadingPastSession = false; // Debounce flag for scroll-triggered lazy load
+    let isRenderingHistory = false;   // Flag to prevent unread counter & scroll bottom badge while loading history
+
+    // enableInput() and disableInput() are defined further below (complete versions
+    // that handle file-btn, emoji-btn, opacity, cursor, and pointerEvents).
+
+    // ── Visitor ID ───────────────────────────────────────────────────
+
+    function getVisitorId() {
+      const key = "vlc_vid_" + WORKSPACE;
+      let vid = localStorage.getItem(key);
+      if (!vid) {
+        vid = "v_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(key, vid);
+      }
+      return vid;
+    }
+
+    // ── Connect Socket ───────────────────────────────────────────────
+    function connectSocket() {
+      if (typeof io === "undefined") {
+        console.warn("[vlc] Socket.io client library loading, retrying in 200ms...");
+        setTimeout(connectSocket, 200);
+        return;
+      }
+
+      // Guard: prevent duplicate connections if socket already connected/connecting
+      if (socket && (socket.connected || socket.connecting)) {
+        console.warn("[vlc] Socket already connected, skipping duplicate connect.");
+        return;
+      }
+
+      socket = io(API_BASE + "/livechat", {
+        auth: { visitorId: VISITOR_ID, ws: WORKSPACE, page: PAGE, ref: REF },
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionDelay: 1000,
+      });
+
+      socket.on("connect", () => {
+        socketReady = true;
+        // Do NOT set hasCsOnline here — CS online state comes from agents:update / applyBranding
+        // Just re-render the status bar so it stops showing "Menghubungkan..."
+        updateStatus();
+        console.log("[vlc] Connected:", socket.id);
+      });
+
+      socket.on("disconnect", () => {
+        socketReady = false;
+        updateStatus(); // re-render as "Menghubungkan..." without touching hasCsOnline
+      });
+
+      socket.on("chat:unavailable", ({ reason }) => {
+        showToast("Chat tidak tersedia: " + reason);
+        if (reason && reason.toLowerCase().includes("diblokir")) {
+          isBlockedVisitor = true;
+          hasActiveSession = false;
+          showScreen("prechat");
+          const pcBtn = document.getElementById("prechat-start-btn");
+          if (pcBtn) {
+            pcBtn.disabled = true;
+            pcBtn.textContent = "🚫 Akses Diblokir";
+            pcBtn.style.opacity = "0.5";
+            pcBtn.style.cursor = "not-allowed";
+          }
+        }
+      });
+
+      // ── Branding + flow config ──────────────────────────────────
+      // (applyBranding, buildPrechatForm, renderAnnouncementCard are defined globally below
+      //  so both HTTP fetch and socket events use the same unified implementation)
+
+      // ── Real-time workspace settings update (admin changed settings while visitor on prechat/chat) ──
+      socket.on("flow:config_updated", (data) => {
+        if (data.flow_config) flowConfig = data.flow_config;
+
+        // Silently merge updated branding config into memory
+        if (data.branding) {
+          branding = { ...branding, ...data.branding };
+          applyBranding(data.branding);
+        }
+
+        const isBotEnabled = data.chatbotEnabled !== false && (data.branding ? data.branding.chatbotEnabled !== false : true);
+
+        // ── If visitor is still on prechat form, rebuild form silently ──
+        // Typed values are preserved so visitor does not lose their input
+        if (!hasActiveSession && currentScreen === "prechat") {
+          // Re-render announcement card if it changed
+          if (data.branding && data.branding.announcementConfig !== undefined) {
+            renderAnnouncementCard(data.branding.announcementConfig);
+          }
+          // Rebuild prechat form fields if they changed, preserving typed values
+          if (data.branding && data.branding.prechatFields) {
+            const newFields = data.branding.prechatFields;
+            const savedValues = {};
+            newFields.forEach(f => {
+              const el = document.getElementById("pc_" + f.key);
+              if (el) savedValues[f.key] = el.value;
+            });
+            buildPrechatForm(newFields);
+            newFields.forEach(f => {
+              const el = document.getElementById("pc_" + f.key);
+              if (el && savedValues[f.key]) el.value = savedValues[f.key];
+            });
+          }
+        }
+
+        // ── If visitor is in an active chat session, apply bot on/off switch ──
+        if (!isBotEnabled) {
+          branding.chatbotEnabled = false;
+          agentMode = true;
+          flowState.mode = "agent";
+          window._flowInputNext = null;
+          if (!isBlockedVisitor && hasActiveSession) {
+            enableInput();
+            const msgInput = document.getElementById("msg-input");
+            if (msgInput) msgInput.placeholder = "Tulis pesan...";
+            const endBtn = document.getElementById("header-end-btn");
+            if (endBtn) endBtn.style.display = "block";
+            const btnArea = document.getElementById("buttons-area");
+            if (btnArea) btnArea.innerHTML = "";
+          }
+        } else {
+          branding.chatbotEnabled = true;
+          if (!hasActiveSession) {
+            agentMode = false;
+            flowState.mode = "bot";
+          }
+        }
+      });
+
+      // ── Agents status update (online/offline changes & settings save) ──
+      socket.on("agents:update", ({ agents, is_online }) => {
+        const onlineBool = typeof is_online === "boolean" ? is_online : (Array.isArray(agents) && agents.some(a => a.is_online));
+        // Update avatar bar in prechat screen
+        renderCSAvatars(agents || []);
+        // Update header online status dot
+        updateStatus(onlineBool);
+        // Update branding state so future applyBranding calls stay consistent
+        if (branding) {
+          branding.agents = agents || [];
+          branding.is_online = onlineBool;
+        }
+      });
+
+      socket.on("flow:config", ({ flow, branding: b }) => {
+        branding = b || {};
+        flowConfig = flow;
+        applyBranding(b);
+        updateStatus(b?.is_online);
+
+        const isPrechatOn = b?.prechatEnabled !== undefined ? b.prechatEnabled : (b?.prechat_enabled !== false);
+        const pFields = b?.prechatFields || b?.prechat_fields || [{ key: "username", label: "Username / ID", required: true }];
+
+        // If chatbot is disabled, skip flow entirely and go to direct CS mode
+        if (b?.chatbotEnabled === false) {
+          agentMode = true;
+          if (isPrechatOn && !hasActiveSession) {
+            buildPrechatForm(pFields);
+            showScreen("prechat");
+          } else if (!hasActiveSession) {
+            hasActiveSession = true;
+            showScreen("chat");
+            enableInput();
+            document.getElementById("msg-input").placeholder = "Tulis pesan...";
+            document.getElementById("header-end-btn").style.display = "block";
+            appendSystemMessage("✅ Terhubung dengan Customer Service. Silakan ketik pesan Anda.");
+          }
+          return;
+        }
+
+        if (isPrechatOn && !hasActiveSession) {
+          buildPrechatForm(pFields);
+          showScreen("prechat");
+        } else if (!hasActiveSession) {
+          // No prechat — go straight to chat, bot will render in startChatDirect
+          startChatDirect();
+        }
+        // If hasActiveSession: flow:restore or history handler already set the screen, skip
+      });
+
+      socket.on("flow:restore", (state) => {
+        hasActiveSession = true;
+        if (state.mode === "agent") {
+          agentMode = true;
+          flowState.mode = "agent";
+          window._flowInputNext = null;
+          showScreen("chat");
+          enableInput();
+          document.getElementById("msg-input").placeholder = "Tulis pesan...";
+          document.getElementById("header-end-btn").style.display = "block";
+          const btnArea = document.getElementById("buttons-area");
+          if (btnArea) btnArea.innerHTML = "";
+        } else {
+          agentMode = false;
+          flowState.mode = "bot";
+          showScreen("chat");
+          renderFlowNode(state.nodeId || "main");
+        }
+      });
+
+      // ── Chat history (continuous timeline) ──────────────────────
+      socket.on("history", ({ messages, status, flowMode, activeConvId, isBlocked, previousSessions }) => {
+        document.getElementById("messages").innerHTML = "";
+        const msgs = messages || [];
+
+        // Save activeConvId to global convId for file uploads
+        if (activeConvId) convId = activeConvId;
+
+        // ── WhatsApp-style: store previous resolved sessions for lazy load on scroll-to-top
+        // Only populate on initial connect (not on prechat re-emit which sends [])
+        if (Array.isArray(previousSessions) && previousSessions.length > 0) {
+          widgetPreviousSessions = previousSessions.slice(); // newest first (DESC order from backend)
+        }
+
+        if (isBlocked || isBlockedVisitor) {
+          setVisitorBlockedUI(false);
+          scrollWidgetToBottom(true);
+          return;
+        }
+
+        // ── KEY FIX: Only show chat screen if there is an ACTIVE (non-resolved) conversation ──
+        // If status = "resolved" or no activeConvId → show welcome/prechat screen for new session
+        const isActiveConversation = activeConvId && status && status !== "resolved";
+
+        if (isActiveConversation) {
+          isRenderingHistory = true;
+          // Render full history for the active conversation
+          msgs.forEach(renderMessage);
+
+          const hasAgentMsg = msgs.some(m => m.sender_type === "agent" && !m.is_internal);
+          hasActiveSession = true;
+          showScreen("chat");
+          document.getElementById("header-end-btn").style.display = "block";
+          if (flowMode === "agent" || hasAgentMsg) {
+            agentMode = true;
+            flowState.mode = "agent";
+            enableInput();
+            document.getElementById("msg-input").placeholder = "Tulis pesan...";
+            const btnArea = document.getElementById("buttons-area");
+            if (btnArea) btnArea.innerHTML = "";
+          }
+          // Note: if bot mode, flow:restore will handle the flow node rendering
+
+          // Show WhatsApp-style "load previous sessions" trigger at top if any exist
+          if (widgetPreviousSessions.length > 0) {
+            requestAnimationFrame(() => renderWidgetPreviousSessionTrigger());
+          }
+
+          requestAnimationFrame(() => {
+            scrollWidgetToBottom(true);
+            isRenderingHistory = false;
+          });
+        } else {
+          // No active session — stay on welcome/prechat screen for fresh start
+          // The flow:config handler will show the correct screen (prechat or direct chat)
+          convId = null; // Reset so next chat gets a fresh conversation
+          hasActiveSession = false;
+          // DON'T render old resolved messages — user sees fresh start
+        }
+      });
+
+      // ── Conversation created (for new visitors without history or after session reset) ──────
+      socket.on("conv:created", ({ conversationId }) => {
+        // Always update convId — old (resolved) convId must be replaced with the new active one
+        if (conversationId) convId = conversationId;
+      });
+
+      // ── Flow update (Agent takeover signal or bot reset) ────────
+      socket.on("conversation:flow_update", (data) => {
+        if (data && (data.mode === "agent" || data.flow_mode === "agent")) {
+          agentMode = true;
+          flowState.mode = "agent";
+          if (hasActiveSession && !isBlockedVisitor) {
+            showScreen("chat");
+            window._flowInputNext = null;
+            enableInput();
+            document.getElementById("msg-input").placeholder = "Tulis pesan...";
+            document.getElementById("header-end-btn").style.display = "block";
+            const btnArea = document.getElementById("buttons-area");
+            if (btnArea) btnArea.innerHTML = "";
+          }
+        } else {
+          agentMode = false;
+          flowState.mode = "bot";
+          window._flowInputNext = null;
+          if (hasActiveSession && !isBlockedVisitor) {
+            renderFlowNode("main");
+          }
+        }
+      });
+
+      function setVisitorBlockedUI(showMsg = false) {
+        isBlockedVisitor = true;
+        disableInput();
+        const inputWrap = document.getElementById("input-wrap");
+        const blockedBanner = document.getElementById("blocked-locked-banner");
+        const btnArea = document.getElementById("buttons-area");
+        if (inputWrap) inputWrap.style.display = "none";
+        if (blockedBanner) blockedBanner.style.display = "flex";
+        if (btnArea) { btnArea.innerHTML = ""; btnArea.style.display = "none"; }
+        const popover = document.getElementById("emoji-picker-popover");
+        if (popover) popover.style.display = "none";
+        if (typeof cancelWidgetUpload === "function") cancelWidgetUpload();
+
+        // Lock Pre-chat submit button as well
+        const pcBtn = document.getElementById("prechat-start-btn");
+        if (pcBtn) {
+          pcBtn.disabled = true;
+          pcBtn.textContent = "🚫 Akses Diblokir";
+          pcBtn.style.opacity = "0.5";
+          pcBtn.style.cursor = "not-allowed";
+        }
+
+        if (showMsg) {
+          showToast("Akses livechat Anda telah diblokir oleh administrator.");
+          appendSystemMessage("🚫 Akses percakapan Anda telah diblokir oleh Administrator.");
+        }
+      }
+
+      function setVisitorUnblockedUI(showMsg = false) {
+        isBlockedVisitor = false;
+        const inputWrap = document.getElementById("input-wrap");
+        const blockedBanner = document.getElementById("blocked-locked-banner");
+        const btnArea = document.getElementById("buttons-area");
+
+        if (blockedBanner) blockedBanner.style.display = "none";
+        if (inputWrap) inputWrap.style.display = "flex";
+        if (btnArea) btnArea.style.display = "flex";
+
+        // 1. Unlock Pre-chat submit button if on pre-chat screen
+        const pcBtn = document.getElementById("prechat-start-btn");
+        if (pcBtn) {
+          pcBtn.disabled = false;
+          pcBtn.textContent = "Mulai Percakapan 💬";
+          pcBtn.style.opacity = "1";
+          pcBtn.style.cursor = "pointer";
+        }
+
+        // 2. ALWAYS enable textarea, send button, file attachment, & emoji button
+        enableInput();
+        const msgInp = document.getElementById("msg-input");
+        if (msgInp) msgInp.placeholder = "Tulis pesan...";
+
+        // 3. Render bot menu buttons and input bar if in bot mode (Screenshot 2 exact state)
+        const chatScreenEl = document.getElementById("screen-chat");
+        const isChatActive = hasActiveSession || currentScreen === "chat" || (chatScreenEl && chatScreenEl.classList.contains("active"));
+
+        if (isChatActive) {
+          showScreen("chat");
+          if (agentMode) {
+            if (btnArea) btnArea.innerHTML = "";
+          } else {
+            renderFlowNode(flowState.nodeId || "main");
+          }
+        }
+
+        // 4. Re-sync history & messages from server so latest replies appear real-time!
+        if (socket && socket.connected) {
+          socket.emit("visitor:init", {
+            name: localStorage.getItem("vlc_vname_" + WORKSPACE) || "",
+            page: PAGE, ref: REF, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            lang: navigator.language, scr: screen.width + "x" + screen.height
+          });
+        }
+
+        if (showMsg) {
+          showToast("Akses percakapan Anda telah dibuka kembali.");
+          appendSystemMessage("✅ Akses percakapan Anda telah dibuka kembali oleh Administrator.");
+        }
+      }
+
+      socket.on("visitor:blocked", () => {
+        if (isBlockedVisitor) return;
+        setVisitorBlockedUI(true);
+      });
+
+      socket.on("visitor:unblocked", () => {
+        if (!isBlockedVisitor) return;
+        setVisitorUnblockedUI(true);
+      });
+
+      // ── Realtime CS Agent status update (duplicate handler cleaned up) ──
+
+      // ── Conversation resolved by agent or SLA cron ─────────────────
+      socket.on("conversation:resolved", () => {
+        showToast("Percakapan telah diakhiri. Terima kasih!");
+        endSessionAndResetUI();
+      });
+
+      // ── Multi-Tab BroadcastChannel Sync ──────────────────────────────
+      const tabSyncChannel = (typeof BroadcastChannel !== "undefined")
+        ? new BroadcastChannel("vlc_widget_tab_sync_" + (VISITOR_ID || "default"))
+        : null;
+
+      if (tabSyncChannel) {
+        tabSyncChannel.onmessage = (event) => {
+          const { type, payload } = event.data || {};
+          if (type === "AGENT_MESSAGE" && payload) {
+            if (payload.messageId && document.querySelector(`[data-msg-id="${payload.messageId}"]`)) return;
+            if (!hasActiveSession) {
+              hasActiveSession = true;
+            }
+            if (!agentMode) {
+              agentMode = true;
+              flowState.mode = "agent";
+              enableInput();
+              document.getElementById("msg-input").placeholder = "Tulis pesan...";
+              document.getElementById("header-end-btn").style.display = "block";
+              const btnArea = document.getElementById("buttons-area");
+              if (btnArea) btnArea.innerHTML = "";
+            }
+            showScreen("chat");
+            renderAgentMessage({
+              text: payload.text,
+              image_url: payload.imageUrl,
+              file_url: payload.fileUrl,
+              file_name: payload.fileName,
+              file_mime: payload.fileMime,
+              message_type: payload.messageType || "text",
+              id: payload.messageId,
+              sender_name: payload.senderName,
+              sender_avatar: payload.senderAvatar,
+              created_at: payload.createdAt || new Date().toISOString(),
+            });
+            scrollToBottom();
+          } else if (type === "VISITOR_MESSAGE" && payload) {
+            const existingByClient = payload.client_id ? document.querySelector(`[data-client-id="${payload.client_id}"]`) : null;
+            const existingById = payload.id ? document.querySelector(`[data-msg-id="${payload.id}"]`) : null;
+            if (!existingByClient && !existingById) {
+              renderMessage(payload);
+              scrollToBottom();
+            }
+          } else if (type === "CHAT_TAKEN_OVER") {
+            agentMode = true;
+            flowState.mode = "agent";
+            enableInput();
+            document.getElementById("msg-input").placeholder = "Tulis pesan...";
+            document.getElementById("header-end-btn").style.display = "block";
+            document.getElementById("buttons-area").innerHTML = "";
+            showScreen("chat");
+          } else if (type === "CHAT_RESOLVED") {
+            endSessionAndResetUI();
+          } else if (type === "SESSION_STARTED") {
+            hasActiveSession = true;
+            showScreen("chat");
+            document.getElementById("header-end-btn").style.display = "block";
+          } else if (type === "TYPING_INDICATOR") {
+            document.getElementById("typing-indicator").classList.toggle("show", !!payload?.typing);
+          }
+        };
+      }
+
+      // ── Visitor Sound & Title Flashing ─────────────────────────────
+      let flashTimer = null;
+      const originalTitle = document.title || "vlivechat";
+
+      function playVisitorNotificationSound() {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+          osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.15, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.35);
+        } catch (e) { }
+      }
+
+      function startTitleFlashing() {
+        if (flashTimer || !document.hidden) return;
+        let isAlt = false;
+        flashTimer = setInterval(() => {
+          document.title = isAlt ? "💬 Pesan Baru dari CS!" : "🔔 (1) Pesan Baru!";
+          isAlt = !isAlt;
+        }, 1000);
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && flashTimer) {
+          clearInterval(flashTimer);
+          flashTimer = null;
+          document.title = originalTitle;
+        }
+      });
+
+      // ── Agent message ─────────────────────────────────────────────
+      socket.on("agent:message", (data) => {
+        if (!data) return;
+        const msgObj = data.message || data;
+        const msgId = msgObj.id || data.messageId;
+        const msgText = msgObj.text || data.text;
+        const msgSenderType = msgObj.sender_type || data.senderType || "agent";
+        const msgSenderName = msgObj.sender_name || data.senderName || (msgSenderType === "bot" ? "Auto Reply" : "Customer Service");
+        const msgAvatar = msgObj.sender_avatar || data.senderAvatar;
+        const msgCreatedAt = msgObj.created_at || data.createdAt || new Date().toISOString();
+
+        // Deduplication check: if messageId already rendered in DOM, ignore duplicate!
+        if (msgId && document.querySelector(`[data-msg-id="${msgId}"]`)) {
+          return;
+        }
+
+        const name = (data && data.senderName) ? data.senderName : "Customer Service";
+
+        // Play sound notification & flash title if visitor received message
+        playVisitorNotificationSound();
+        startTitleFlashing();
+
+        // If visitor is currently inside active chat session:
+        if (hasActiveSession) {
+          if (!agentMode) {
+            agentMode = true;
+            flowState.mode = "agent";
+            window._flowInputNext = null;
+            enableInput();
+            document.getElementById("msg-input").placeholder = "Tulis pesan...";
+            document.getElementById("header-end-btn").style.display = "block";
+            const btnArea = document.getElementById("buttons-area");
+            if (btnArea) btnArea.innerHTML = "";
+            appendSystemMessage("👤 CS (" + name + ") telah membalas percakapan Anda.");
+          } else {
+            enableInput();
+          }
+        }
+
+        renderMessage({
+          sender_type: msgSenderType,
+          text: msgText,
+          file_url: msgObj.file_url || data.fileUrl,
+          file_name: msgObj.file_name || data.fileName,
+          file_mime: msgObj.file_mime || data.fileMime,
+          message_type: msgObj.message_type || data.messageType || "text",
+          id: msgId,
+          sender_name: msgSenderName,
+          sender_avatar: msgAvatar,
+          created_at: msgCreatedAt,
+        });
+        smartScrollWidgetToBottom();
+        lastMsgId = data.messageId;
+
+        // Auto-read: tell server visitor has read this message ONLY if visitor is looking at bottom
+        if (data.messageId && hasActiveSession && isWidgetNearBottom(250)) {
+          socket.emit("visitor:read", { lastMessageId: data.messageId });
+        }
+
+        // Broadcast to other open browser tabs
+        try { tabSyncChannel?.postMessage({ type: "AGENT_MESSAGE", payload: data }); } catch (e) { }
+
+        // Notify parent frame
+        notifyParent("vlc:new_message", {});
+      });
+
+      // ── Agent typing ─────────────────────────────────────────────
+      socket.on("agent:typing-indicator", ({ typing }) => {
+        document.getElementById("typing-indicator").classList.toggle("show", typing);
+        try { tabSyncChannel?.postMessage({ type: "TYPING_INDICATOR", payload: { typing } }); } catch (e) { }
+      });
+
+      // ── Message delivered/read by agent ──────────────────────────
+      socket.on("message:delivered", () => updateLastMessageStatus("delivered"));
+      socket.on("message:read_by_agent", ({ upToMessageId }) => {
+        updateLastMessageStatus("read", upToMessageId);
+      });
+
+      // ── Message sent ACK ─────────────────────────────────────────
+      socket.on("message:sent", ({ messageId, clientId }) => {
+        // Replace temp bubble with confirmed one
+        const tempEl = document.querySelector(`[data-client-id="${clientId}"]`);
+        if (tempEl && messageId) {
+          tempEl.setAttribute("data-msg-id", messageId);
+          updateMsgStatus(tempEl, "sent");
+        }
+        lastMsgId = messageId;
+      });
+
+      // ── Multi-Tab Echo ──────────────────────────────────────────
+      socket.on("visitor:message_echo", ({ message, clientId }) => {
+        if (message && message.text) {
+          const existingByClient = clientId ? document.querySelector(`[data-client-id="${clientId}"]`) : null;
+          const existingById = message.id ? document.querySelector(`[data-msg-id="${message.id}"]`) : null;
+          if (!existingByClient && !existingById) {
+            renderMessage(message);
+          }
+          try { tabSyncChannel?.postMessage({ type: "VISITOR_MESSAGE", payload: message }); } catch (e) { }
+        }
+      });
+
+      // ── Chat resolved (by agent, SLA cron, or visitor in another tab) ──
+      socket.on("chat:resolved", ({ message }) => {
+        try { tabSyncChannel?.postMessage({ type: "CHAT_RESOLVED", payload: { message } }); } catch (e) { }
+        endSessionAndResetUI();
+      });
+
+      socket.on("conversation:resolved", () => {
+        try { tabSyncChannel?.postMessage({ type: "CHAT_RESOLVED" }); } catch (e) { }
+        endSessionAndResetUI();
+      });
+
+      // ── Session started in another tab ─────────────────────────────
+      socket.on("visitor:session_started", () => {
+        hasActiveSession = true;
+        showScreen("chat");
+        document.getElementById("header-end-btn").style.display = "block";
+        try { tabSyncChannel?.postMessage({ type: "SESSION_STARTED" }); } catch (e) { }
+      });
+
+      // ── Chat takeover by CS ──────────────────────────────────────
+      socket.on("chat:taken_over", ({ agentName }) => {
+        agentMode = true;
+        flowState.mode = "agent";
+        enableInput();
+        document.getElementById("msg-input").placeholder = "Tulis pesan...";
+        document.getElementById("header-end-btn").style.display = "block";
+        document.getElementById("buttons-area").innerHTML = "";
+        appendSystemMessage(`⚡ ${agentName || 'CS'} telah mengambil alih percakapan.`);
+        showScreen("chat");
+        try { tabSyncChannel?.postMessage({ type: "CHAT_TAKEN_OVER", payload: { agentName } }); } catch (e) { }
+      });
+
+      // ── Visitor blocked/unblocked handled above in setVisitorBlockedUI/setVisitorUnblockedUI ──
+      socket.on("chat:reset", () => {
+        resetWidget();
+      });
+
+      // Handle past session loaded from server (On-Demand Pagination)
+      socket.on("visitor:past_session_loaded", ({ conversationId, messages: pMsgs, createdAt }) => {
+        const container = document.getElementById("messages");
+        if (!container || !pMsgs) return;
+        isRenderingHistory = true; // Block unread counter & smart scroll during history prepending
+        const oldScrollHeight = container.scrollHeight;
+
+        const trigger = document.getElementById("widget-history-trigger");
+        if (trigger) trigger.remove();
+
+        // Create past session block wrapper
+        const pastWrap = document.createElement("div");
+        pastWrap.className = "past-session-block";
+        const d = createdAt ? new Date(createdAt) : new Date();
+        const timeStr = d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+        const dateStr = d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+
+        // Date divider header for this past session block
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "msg-row system session-date-divider";
+        headerDiv.innerHTML = `<div class="msg-bubble" style="background:rgba(255,255,255,0.06);font-size:11px;border-radius:12px;padding:4px 10px;color:var(--text-secondary)">— ${dateStr} ${timeStr} —</div>`;
+        pastWrap.appendChild(headerDiv);
+
+        // Bug C fix: use renderMessage() for consistent styling across all sender types
+        // (visitor, agent, bot, system) instead of fragile inline HTML.
+        // We temporarily redirect appendChild to pastWrap so renderMessage appends there.
+        const msgsEl = document.getElementById("messages");
+        const origAppendChild = msgsEl.appendChild.bind(msgsEl);
+        msgsEl.appendChild = (el) => pastWrap.appendChild(el);
+        pMsgs.forEach(m => renderMessage(m));
+        msgsEl.appendChild = origAppendChild; // restore
+
+        container.prepend(pastWrap);
+        renderWidgetPreviousSessionTrigger();
+
+        // Preserve exact scroll position so screen doesn't jump
+        requestAnimationFrame(() => {
+          container.scrollTop = container.scrollHeight - oldScrollHeight;
+          // Reset debounce lock so next scroll-to-top can load another session
+          isLoadingPastSession = false;
+          isRenderingHistory = false; // Reset flag after scroll preservation
+        });
+      });
+    }
+
+    function renderCSAvatars(agents) {
+      const bar = document.getElementById("cs-avatars-bar");
+      const pcLogo = document.getElementById("prechat-logo-wrap");
+      if (!bar) return;
+      if (!agents || agents.length === 0) {
+        bar.style.display = "none";
+        if (pcLogo) pcLogo.style.display = "flex";
+        return;
+      }
+      bar.style.display = "flex";
+      if (pcLogo) pcLogo.style.display = "none"; // Hide workspace logo circle if CS avatars are present to avoid double stacking
+      bar.innerHTML = agents.map(a => {
+        const avatarContent = a.avatar_url
+          ? `<img src="${API_BASE}${a.avatar_url}" alt="${a.display_name || a.name}">`
+          : (a.display_name || a.name || "CS").charAt(0).toUpperCase();
+        const dotCls = a.is_online ? "cs-avatar-dot" : "cs-avatar-dot offline";
+        return `
+      <div class="cs-avatar-item">
+        <div class="cs-avatar-circle" style="background:${a.avatar_bg || 'var(--primary)'}">
+          ${avatarContent}
+          <div class="${dotCls}"></div>
+        </div>
+        <div class="cs-avatar-name">${a.display_name || a.name || 'CS'}</div>
+      </div>
+    `;
+      }).join("");
+    }
+
+    // ── Apply Branding (UNIFIED — used by both HTTP fetch and socket flow:config) ────
+    function applyBranding(b) {
+      if (!b) return;
+
+      // Merge into global branding state (support both camelCase and snake_case keys from API)
+      branding = { ...branding, ...b };
+
+      const brandColor = b.brandColor || b.brand_color;
+      const brandSecondary = b.brandSecondary || b.brand_secondary;
+      const brandName = b.brandName || b.brand_name;
+      const welcomeTitle = b.welcomeTitle || b.welcome_title;
+      const welcomeSubtitle = b.welcomeSubtitle || b.welcome_subtitle;
+      const brandLogoUrl = b.brandLogoUrl || b.brand_logo_url;
+      const widgetPosition = b.widgetPosition || b.widget_position;
+      const prechatEnabled = b.prechatEnabled !== undefined ? b.prechatEnabled
+        : (b.prechat_enabled !== false);
+      const prechatFields = b.prechatFields || b.prechat_fields
+        || [{ key: "username", label: "Username / ID", required: true }];
+
+      const r = document.documentElement;
+      if (brandColor) {
+        r.style.setProperty("--primary", brandColor);
+        r.style.setProperty("--bubble-visitor", brandColor);
+        const startBtn = document.getElementById("prechat-start-btn");
+        if (startBtn) startBtn.style.background = brandColor;
+      }
+      if (brandSecondary) r.style.setProperty("--secondary", brandSecondary);
+
+      const brandNameEl = document.getElementById("header-brand");
+      if (brandNameEl) brandNameEl.textContent = brandName || "Customer Service";
+      if (brandName) document.title = `${brandName} — Live Chat`;
+      const pcTitleEl = document.getElementById("prechat-title");
+      if (pcTitleEl) pcTitleEl.textContent = welcomeTitle || "Halo! Ada yang bisa kami bantu?";
+      const pcSubEl = document.getElementById("prechat-sub");
+      if (pcSubEl) pcSubEl.textContent = welcomeSubtitle || "Tim kami siap membantu Anda.";
+
+      const isBotOn = b.chatbotEnabled !== undefined ? b.chatbotEnabled : (b.chatbot_enabled !== false);
+      if (b.chatbotEnabled !== undefined || b.chatbot_enabled !== undefined) {
+        branding.chatbotEnabled = isBotOn;
+      }
+
+      let isOnlineVal = false;
+      if (typeof b.is_online === "boolean") {
+        isOnlineVal = b.is_online;
+      } else if (Array.isArray(b.agents)) {
+        isOnlineVal = b.agents.some(a => a.is_online);
+      } else if (typeof branding.is_online === "boolean") {
+        isOnlineVal = branding.is_online;
+      }
+      branding.is_online = isOnlineVal;
+      updateStatus(isOnlineVal);
+
+      const logoWrap = document.getElementById("header-logo");
+      const pcLogo = document.getElementById("prechat-logo-wrap");
+      if (brandLogoUrl) {
+        const imgHtml = `<img src="${escapeHtml(brandLogoUrl)}" alt="logo" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+        if (logoWrap) logoWrap.innerHTML = imgHtml;
+        if (pcLogo) pcLogo.innerHTML = imgHtml;
+      } else if (brandName) {
+        const initial = brandName.charAt(0).toUpperCase();
+        if (logoWrap) logoWrap.textContent = initial;
+        if (pcLogo) pcLogo.textContent = initial;
+      }
+
+      // Build prechat input form if prechat is enabled
+      if (prechatEnabled) {
+        buildPrechatForm(prechatFields);
+      }
+
+      // Render CS avatars bar
+      renderCSAvatars(b.agents || []);
+
+      // Render Announcement Card to both chat-screen and prechat-screen containers
+      renderAnnouncementCard(b.announcementConfig || b.announcement_config);
+
+      // Notify parent iframe of brand color
+      notifyParent("vlc:branding", { color: brandColor, position: widgetPosition });
+    }
+
+    // ── Announcement Card (prechat screen ONLY) ──────────────────────────
+    function renderAnnouncementCard(ann) {
+      const container = document.getElementById("prechat-announcement-container");
+      if (!container) return;
+
+      if (!ann || !ann.enabled || (!ann.title && !ann.text)) {
+        container.style.display = "none";
+        container.innerHTML = "";
+        return;
+      }
+
+      const titleText = ann.title || "Pengumuman";
+      const bodyText = ann.text || "";
+      const btnText = ann.button_text || (bodyText.startsWith("http") ? "Buka Link" : "");
+      const linkUrl = ann.link_url || (bodyText.startsWith("http") ? bodyText : "#");
+
+      container.style.display = "block";
+      container.innerHTML = `
+    <div class="ann-card">
+      <div class="ann-title">
+        <svg class="ann-icon-svg" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+        <span>${escapeHtml(titleText)}</span>
+      </div>
+      ${bodyText ? `<div class="ann-body">${escapeHtml(bodyText)}</div>` : ""}
+      ${btnText ? `<a href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer" class="ann-btn">
+        <span>${escapeHtml(btnText)}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>` : ""}
+    </div>
+  `;
+    }
+
+    // ── Pre-chat form (generates inputs with id="pc_*" needed by startChat()) ────────
+    function buildPrechatForm(fields) {
+      const form = document.getElementById("prechat-form");
+      if (!form) return;
+      form.innerHTML = "";
+
+      let fieldList = fields;
+      if (typeof fieldList === "string") {
+        try { fieldList = JSON.parse(fieldList); } catch { fieldList = []; }
+      }
+      if (!Array.isArray(fieldList) || fieldList.length === 0) {
+        fieldList = [{ key: "username", label: "Username / ID", required: true }];
+      }
+
+      const savedName = localStorage.getItem("vlc_vname_" + WORKSPACE) || "";
+      fieldList.forEach(f => {
+        const div = document.createElement("div");
+        div.className = "prechat-field";
+        const defaultVal = (f.key === "username" || f.key === "name") ? savedName : "";
+        // id="pc_${f.key}" is CRITICAL — startChat() uses getElementById("pc_" + f.key)
+        div.innerHTML = `<label>${escapeHtml(f.label)}${f.required ? " *" : ""}</label>
+      <input id="pc_${escapeHtml(f.key)}" type="text" placeholder="${escapeHtml(f.label)}" value="${escapeHtml(defaultVal)}" maxlength="35" ${f.required ? "required" : ""}>`;
+        form.appendChild(div);
+      });
+    }
+
+    // ── Start Chat ───────────────────────────────────────────────────
+    function startChat() {
+      const btn = document.getElementById("prechat-start-btn");
+      if (isBlockedVisitor) {
+        showToast("🚫 Akses percakapan Anda telah diblokir oleh administrator.");
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "🚫 Akses Diblokir";
+          btn.style.opacity = "0.5";
+          btn.style.cursor = "not-allowed";
+        }
+        return;
+      }
+      const fields = branding.prechatFields || [];
+      const data = {};
+      let name = "";
+      let valid = true;
+
+      for (const f of fields) {
+        const input = document.getElementById("pc_" + f.key);
+        if (!input) continue;
+        const val = input.value.trim();
+        if (f.required && !val) {
+          input.focus();
+          showToast(`${f.label} wajib diisi`);
+          valid = false; break;
+        }
+        data[f.key] = val;
+        if (f.key === "username" || f.key === "name") name = val;
+      }
+      if (!valid) return;
+
+      if (name) {
+        localStorage.setItem("vlc_vname_" + WORKSPACE, name);
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Memulai...";
+
+      hasActiveSession = true;
+      window._flowInputNext = null;
+      socket.emit("visitor:prechat", { name, data });
+      try { tabSyncChannel?.postMessage({ type: "SESSION_STARTED", payload: { name } }); } catch (e) { }
+
+      showScreen("chat");
+      document.getElementById("header-end-btn").style.display = "block";
+
+      // Immediately render UI based on current bot mode
+      // (flow:restore from server will arrive shortly & confirm/override if needed)
+      if (agentMode || branding.chatbotEnabled === false) {
+        // Direct CS mode — enable input immediately
+        enableInput();
+        document.getElementById("msg-input").placeholder = "Tulis pesan...";
+        const btnArea = document.getElementById("buttons-area");
+        if (btnArea) btnArea.innerHTML = "";
+      } else {
+        // Bot mode — render main menu
+        renderFlowNode("main");
+      }
+    }
+
+    function startChatDirect() {
+      hasActiveSession = true;
+      window._flowInputNext = null;
+      showScreen("chat");
+      document.getElementById("header-end-btn").style.display = "block";
+      // If chatbot mode, render initial bot node immediately
+      if (!agentMode && branding?.chatbotEnabled !== false) {
+        flowState.mode = "bot";
+        renderFlowNode("main");
+      } else if (agentMode) {
+        enableInput();
+        document.getElementById("msg-input").placeholder = "Tulis pesan...";
+        const btnArea = document.getElementById("buttons-area");
+        if (btnArea) btnArea.innerHTML = "";
+      }
+    }
+
+    function checkAndTriggerAutoGreeting() {
+      // Auto greeting is handled centrally by backend visitor.js to prevent duplicate greetings
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // FLOW ENGINE
+    // ═══════════════════════════════════════════════════════════════
+
+    function getNode(nodeId) {
+      if (!flowConfig?.nodes) return null;
+      return flowConfig.nodes.find(n => n.id === nodeId) || null;
+    }
+
+    function renderFlowNode(nodeId) {
+      if (agentMode) {
+        window._flowInputNext = null;
+        console.log("[vlc] Agent mode active, suppressing bot node:", nodeId);
+        return;
+      }
+
+      const node = getNode(nodeId);
+      if (!node) {
+        console.warn("[vlc] Node not found:", nodeId);
+        return;
+      }
+
+      flowState.nodeId = nodeId;
+
+      // Render node message as bot message (de-duplicated if identical bot message is already rendered in current active session)
+      if (node.message) {
+        const msgsEl = document.getElementById("messages");
+        const nodeMsgText = (node.message || "").trim();
+        const activeSelector = convId
+          ? `.msg-row.bot[data-conv-id="${convId}"] .msg-bubble, .msg-row.bot[data-active-session="true"] .msg-bubble`
+          : `.msg-row.bot[data-active-session="true"] .msg-bubble`;
+        const botBubbles = msgsEl ? msgsEl.querySelectorAll(activeSelector) : [];
+        const activeBotTexts = Array.from(botBubbles).map(b => (b.innerText || "").trim());
+
+        const isAlreadyPresent = activeBotTexts.some(text => 
+          text === nodeMsgText || text.includes(nodeMsgText) || nodeMsgText.includes(text)
+        );
+
+        if (!isAlreadyPresent) {
+          appendBotMessage(node.message);
+        }
+      }
+
+      // Clear buttons
+      const btnArea = document.getElementById("buttons-area");
+      btnArea.innerHTML = "";
+
+      switch (node.type) {
+        case "menu":
+        case "info":
+          disableInput();
+          const msgInp = document.getElementById("msg-input");
+          if (msgInp) msgInp.placeholder = "💡 Silakan pilih salah satu opsi tombol di atas...";
+          (node.options || []).forEach(opt => {
+            const btn = document.createElement("button");
+            btn.className = "flow-btn";
+            btn.textContent = opt.label;
+            btn.onclick = () => handleOptionClick(opt, btn);
+            btnArea.appendChild(btn);
+          });
+          break;
+
+        case "input":
+          enableInput();
+          document.getElementById("msg-input").placeholder = "Ketik jawaban Anda...";
+          // Override send to go to next node
+          window._flowInputNext = (text) => {
+            if (agentMode) {
+              window._flowInputNext = null;
+              return;
+            }
+            window._flowInputNext = null;
+            appendVisitorMessage(text);
+            // Emit typed input so Admin CS sees what visitor typed
+            socket?.emit("visitor:flow_step", { type: "visitor_choice", text: text });
+            // Save collected data
+            if (node.field) flowState.data[node.field] = text;
+            emitFlowProgress();
+            renderFlowNode(node.next);
+          };
+          break;
+
+        case "summary":
+          disableInput();
+          const summary = buildSummary(flowState.data);
+          appendBotMessage(summary);
+          setTimeout(() => renderFlowNode(node.next), 1000);
+          break;
+
+        case "connect":
+          disableInput();
+          setTimeout(() => {
+            agentMode = true;
+            flowState.mode = "agent";
+            emitFlowProgress();
+            enableInput();
+            document.getElementById("msg-input").placeholder = "Tulis pesan...";
+            appendSystemMessage("✅ Terhubung dengan Customer Service. Silakan ketik pesan Anda.");
+          }, 1500);
+          break;
+      }
+
+      scrollToBottom();
+      emitFlowProgress();
+    }
+
+    function handleOptionClick(opt, btn) {
+      // Disable all buttons
+      document.querySelectorAll(".flow-btn").forEach(b => b.disabled = true);
+
+      // Show visitor's choice as bubble
+      appendVisitorMessage(opt.label);
+
+      // Emit to socket so dashboard sees option click
+      socket?.emit("visitor:flow_step", { type: "visitor_choice", text: opt.label });
+
+      // Save field data if current node defines field (e.g. collect_bank -> jenis_bank: "BCA")
+      const currentNode = (flowConfig.nodes || []).find(n => n.id === flowState.nodeId);
+      const fieldName = currentNode?.field || opt.field || (flowState.nodeId === "collect_bank" ? "jenis_bank" : null);
+      if (fieldName) {
+        flowState.data[fieldName] = opt.label;
+      }
+
+      // Log to flow
+      flowState.log.push({ nodeId: flowState.nodeId, selected: opt.id, label: opt.label, ts: Date.now() });
+      emitFlowProgress();
+
+      // Navigate
+      if (opt.next) {
+        document.getElementById("buttons-area").innerHTML = "";
+        setTimeout(() => renderFlowNode(opt.next), 400);
+      }
+    }
+
+    function buildSummary(data) {
+      const labelMap = {
+        nama_rekening: "Nama Rekening",
+        nomor_rekening: "Nomor Rekening",
+        jenis_bank: "Jenis Bank",
+      };
+      const lines = Object.entries(data).map(([k, v]) => `• **${labelMap[k] || k}**: ${v}`);
+      return "**Ringkasan Data Anda:**\n" + lines.join("\n");
+    }
+
+    function emitFlowProgress() {
+      socket.emit("flow:progress", {
+        data: flowState.data,
+        log: flowState.log,
+        mode: flowState.mode,
+        nodeId: flowState.nodeId,
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // MESSAGE RENDERING
+    // ═══════════════════════════════════════════════════════════════
+
+    function renderMessage(msg) {
+      const senderType = msg.sender_type;
+
+      // Never show internal notes or SLA/system admin messages to visitors
+      if (msg.is_internal) return;
+      if (senderType === "system") {
+        // Only show system messages that are NOT SLA-related
+        const slaKeywords = ["SLA", "sla exceeded", "terlewat", "SLA missed", "ditandai sebagai terlewat"];
+        if (slaKeywords.some(kw => (msg.text || "").toLowerCase().includes(kw.toLowerCase()))) return;
+        appendSystemMessage(msg.text);
+        return;
+      }
+
+      const row = document.createElement("div");
+      row.className = `msg-row ${senderType}`;
+      if (msg.id) row.setAttribute("data-msg-id", msg.id);
+      // Bug A fix: tag bot messages from history so renderFlowNode deduplication
+      // can detect them on refresh and won't re-append the greeting.
+      if (senderType === "bot") {
+        row.setAttribute("data-active-session", "true");
+        if (convId) row.setAttribute("data-conv-id", convId);
+      }
+
+      const timeStr = formatTime(msg.created_at);
+      let bubbleContent = "";
+
+      if (msg.message_type === "image" && msg.file_url) {
+        bubbleContent = `<img class="msg-image" src="${API_BASE}${msg.file_url}" alt="image" onclick="openLightbox('${API_BASE}${msg.file_url}')">`;
+      } else if (msg.message_type === "file" && msg.file_url) {
+        const fileSize = msg.file_size ? formatFileSize(msg.file_size) : "";
+        bubbleContent = `<a class="msg-file" href="${API_BASE}${msg.file_url}" target="_blank" download="${msg.file_name || 'file'}">
+      <span class="msg-file-icon">📎</span>
+      <div class="msg-file-info">
+        <div class="msg-file-name">${msg.file_name || 'file'}</div>
+        <div class="msg-file-size">${fileSize}</div>
+      </div>
+    </a>`;
+      } else {
+        bubbleContent = markdownToHtml(msg.text || "");
+      }
+
+      const readReceipt = senderType === "visitor" ?
+        (msg.read_at ? `<span class="read-receipt read" id="rr-${msg.id}">✓✓</span>` : `<span class="read-receipt" id="rr-${msg.id}">✓</span>`) : "";
+
+      const vName = localStorage.getItem("vlc_vname_" + WORKSPACE) || "Saya";
+      const senderName = senderType === "agent"
+        ? `<div class="msg-sender-name">${msg.sender_display_name || msg.sender_name || "CS"}</div>`
+        : senderType === "visitor"
+          ? `<div class="msg-sender-name">${msg.sender_name || vName}</div>`
+          : "";
+
+      const avatarHtml = senderType === "agent"
+        ? `<div class="msg-avatar">${msg.sender_avatar
+          ? `<img src="${API_BASE}${msg.sender_avatar}" alt="avatar">`
+          : (msg.sender_display_name || msg.sender_name || "CS").charAt(0).toUpperCase()
+        }</div>`
+        : "";
+
+      row.innerHTML = avatarHtml + `
+    <div class="msg-body">
+      ${senderName}
+      <div class="msg-bubble">${bubbleContent}</div>
+      <div class="msg-time">${timeStr} ${readReceipt}</div>
+    </div>
+  `;
+
+      document.getElementById("messages").appendChild(row);
+      lastMsgId = msg.id;
+    }
+
+    function appendBotMessage(text) {
+      const row = document.createElement("div");
+      row.className = "msg-row bot";
+      row.setAttribute("data-active-session", "true");
+      if (convId) row.setAttribute("data-conv-id", convId);
+      row.innerHTML = `
+    <div class="msg-avatar" style="background:var(--primary)">🤖</div>
+    <div class="msg-body">
+      <div class="msg-bubble">${markdownToHtml(text)}</div>
+      <div class="msg-time">${formatTime(new Date())}</div>
+    </div>
+  `;
+      document.getElementById("messages").appendChild(row);
+      smartScrollWidgetToBottom();
+
+      // Emit bot response to socket so Admin Dashboard sees bot history
+      socket?.emit("visitor:flow_step", { type: "bot", text: text });
+    }
+
+    function appendVisitorMessage(text) {
+      const clientId = "cli_" + Date.now();
+      const vName = localStorage.getItem("vlc_vname_" + WORKSPACE) || "Saya";
+      const row = document.createElement("div");
+      row.className = "msg-row visitor";
+      row.setAttribute("data-client-id", clientId);
+      row.innerHTML = `
+    <div class="msg-body">
+      <div class="msg-sender-name">${vName}</div>
+      <div class="msg-bubble">${markdownToHtml(text)}</div>
+      <div class="msg-time">${formatTime(new Date())} <span class="read-receipt sending">⏳</span></div>
+    </div>
+  `;
+      document.getElementById("messages").appendChild(row);
+      scrollWidgetToBottom(true);
+      return clientId;
+    }
+
+    function appendSystemMessage(text) {
+      const row = document.createElement("div");
+      const isEnded = text.includes("diakhiri") || text.includes("🔒");
+      row.className = "msg-row system" + (isEnded ? " session-ended-pill" : "");
+      row.innerHTML = `<div class="msg-bubble">${text}</div>`;
+      document.getElementById("messages").appendChild(row);
+      if (!isRenderingHistory) smartScrollWidgetToBottom();
+    }
+
+    let unreadWidgetMsgCount = 0;
+
+    function isWidgetNearBottom(threshold = 250) {
+      const msgs = document.getElementById("messages");
+      if (!msgs) return true;
+      const distance = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight;
+      return distance <= threshold;
+    }
+
+    function scrollWidgetToBottom(instant = false) {
+      const pill = document.getElementById("new-msg-pill");
+      unreadWidgetMsgCount = 0;
+      if (pill) pill.classList.remove("show");
+      scrollToBottom(instant);
+      if (lastMsgId && hasActiveSession && socket) {
+        socket.emit("visitor:read", { lastMessageId: lastMsgId });
+      }
+    }
+
+    function smartScrollWidgetToBottom(force = false) {
+      if (isRenderingHistory) return;
+      if (force || isWidgetNearBottom(250)) {
+        scrollWidgetToBottom(false);
+      } else {
+        unreadWidgetMsgCount++;
+        const pill = document.getElementById("new-msg-pill");
+        const badge = document.getElementById("new-msg-badge");
+        if (badge) badge.textContent = unreadWidgetMsgCount;
+        if (pill) pill.classList.add("show");
+      }
+    }
+
+    // Auto-hide pill when user scrolls to bottom or trigger past session load on scroll top
+    document.addEventListener("DOMContentLoaded", () => {
+      const msgsEl = document.getElementById("messages");
+      if (msgsEl) {
+        msgsEl.addEventListener("scroll", () => {
+          if (msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight <= 80) {
+            unreadWidgetMsgCount = 0;
+            const pill = document.getElementById("new-msg-pill");
+            if (pill) pill.classList.remove("show");
+            if (lastMsgId && hasActiveSession && socket) {
+              socket.emit("visitor:read", { lastMessageId: lastMsgId });
+            }
+          }
+          // WhatsApp-style: auto-load older session when scrolled to the very top
+          // isLoadingPastSession flag prevents duplicate loads on rapid scroll events
+          if (msgsEl.scrollTop === 0 && widgetPreviousSessions.length > 0 && !isLoadingPastSession) {
+            loadOlderWidgetSession();
+          }
+        });
+      }
+    });
+
+    function renderWidgetPreviousSessionTrigger() {
+      const container = document.getElementById("messages");
+      if (!container) return;
+      const oldTrigger = document.getElementById("widget-history-trigger");
+      if (oldTrigger) oldTrigger.remove();
+
+      if (widgetPreviousSessions.length > 0) {
+        const triggerDiv = document.createElement("div");
+        triggerDiv.id = "widget-history-trigger";
+        triggerDiv.style.cssText = "text-align:center;margin:8px 0 12px;";
+        triggerDiv.innerHTML = `
+          <button type="button" onclick="loadOlderWidgetSession()"
+            style="background:var(--bg-card);border:1.5px solid var(--border);border-radius:20px;padding:6px 14px;color:var(--text-muted,var(--text-primary));font-size:11px;font-weight:500;cursor:pointer;transition:all 0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.12)">
+            🕐 Klik untuk memuat chat sebelumnya
+          </button>
+        `;
+        container.prepend(triggerDiv);
+      }
+    }
+
+    function loadOlderWidgetSession() {
+      if (widgetPreviousSessions.length === 0 || isLoadingPastSession) return;
+      isLoadingPastSession = true; // Set debounce lock
+      const targetSession = widgetPreviousSessions.shift();
+      const triggerBtn = document.querySelector("#widget-history-trigger button");
+      if (triggerBtn) triggerBtn.disabled = true;
+
+      socket?.emit("visitor:load_past_session", { conversationId: targetSession.id });
+      // isLoadingPastSession will be reset in the visitor:past_session_loaded handler
+    }
+
+
+
+    function updateLastMessageStatus(status, upToMsgId) {
+      if (status === "read") {
+        const rows = document.querySelectorAll(".msg-row.visitor");
+        let stop = false;
+        rows.forEach(row => {
+          if (stop) return;
+          const rr = row.querySelector(".read-receipt");
+          if (rr) {
+            rr.textContent = "✓✓";
+            rr.className = "read-receipt read";
+          }
+          const msgId = row.getAttribute("data-msg-id");
+          if (upToMsgId && msgId === upToMsgId) {
+            stop = true;
+          }
+        });
+      } else {
+        const selector = upToMsgId
+          ? `[data-msg-id="${upToMsgId}"] .read-receipt`
+          : ".msg-row.visitor:last-child .read-receipt";
+        const el = document.querySelector(selector);
+        if (!el) return;
+        el.textContent = "✓";
+        el.className = "read-receipt delivered";
+      }
+    }
+
+    function updateMsgStatus(el, status) {
+      const rr = el.querySelector(".read-receipt");
+      if (rr) {
+        rr.textContent = "✓";
+        rr.className = "read-receipt";
+      }
+    }
+
+    const WIDGET_EMOJI_DATA = {
+      smileys: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "🥲", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🥸", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😮‍💨", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱"],
+      gestures: ["👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🧠", "👀", "👁️", "舌", "👄"],
+      animals: ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", "🐧", "🐦", "🐤", "🦆", "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🪲", "🐛", "🦋", "🐌", "🐞", "🐜", "🪰", "🪴", "🌲", "🌳", "🌴", "🌵", "🌾", "🌿", "☘️", "🍀", "🍁", "🍂", "🍃"],
+      food: ["🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🥑", "🍆", "broccoli", "🥬", "🥒", "🌶️", "🌽", "🥕", "🧄", "🧅", "🥔", "🍠", "🥐", "🍞", "🥖", "🥨", "🥯", "🥞", "🧇", "🧀", "🍖", "🍗", "🥩", "🍔", "🍟", "🍕", "🌭", "🥪", "🌮", "🌯", "🫔", "🥙", "🧆", "🥚", "🍳", "🥘", "🍲", "🥣", "🥗", "🍿", "🧈", "🧂", "🥫", "🍱", "🍘", "🍙", "🍚", "🍛", "🍜", "🍝", "🍦", "🍧", "🍨", "🍩", "🍪", "🎂", "🍰", "🧁", "🥧", "🍫", "🍬", "🍭", "🍮", "🍯", "🍼", "🥛", "☕", "🫖", "🍵", "🍶", "🍾", "🍷", "🍸", "🍹", "🍺", "🍻", "🥂", "🥃", "🥤", "🧋", "🧃", "🧉", "🧊"],
+      activities: ["⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱", "🪀", "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🪃", "🥅", "⛳", "🪁", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼", "🛷", "⛸️", "🎿", "🏂", "🪂", "🏋️‍♀️", "🤼‍♂️", "🤸‍♀️", "⛹️‍♂️", "🤺", "🤾‍♀️", "🏌️‍♂️", "🏇", "🧘‍♀️", "🏄‍♂️", "🏊‍♀️", "🤽‍♂️", "🚣‍♀️", "🧗‍♂️", "🚵‍♀️", "🚴‍♂️", "🏆", "🥇", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🎗️", "🎫", "🎟️", "🎪", "🤹‍♂️", "🎭", "🎨", "🎬", "🎤", "🎧", "🎼", "🎵", "🎶", "🎙️", "🎚️", "🎛️", "📻", "🎷", "🪗", "🎸", "🎹", "🎺", "🎻", "🪕", "🥁", "🎲", "♟️", "🎯", "🎳", "🎮", "🎰", "🧩"],
+      travel: ["🚗", "🚕", "🚙", "🚌", "🏎️", "🚓", "🚑", "🚒", "🚐", "🛻", "🚚", "🚛", "🚜", "🛵", "🏍️", "🛺", "🚲", "🛴", "🚏", "🛣️", "🛤️", "🛢️", "⛽", "🚨", "🚥", "🚦", "🛑", "🚧", "⚓", "⛵", "canoe", "🚤", "🛥️", "🛳️", "⛴️", "🚢", "✈️", "🛩️", "🛫", "🛬", "🪂", "💺", "🚁", "🚟", "🚠", "🦡", "🛰️", "🚀", "🛸", "🛎️", "🧳", "⌛", "⏳", "⌚", "⏰", "⏱️", "⏲️", "🕰️", "🏙️", "🌆", "🌇", "🌃", "♨️", "🏰", "🏯", "🏛️", "⛪", "🕌", "🛕", "🕍", "⛩️"],
+      symbols: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💡", "🔦", "🏮", "📔", "📕", "📖", "📗", "📘", "📙", "📚", "📓", "📒", "📃", "📜", "📄", "📰", "📑", "🔖", "🏷️", "💰", "🪙", "💴", "💵", "💶", "💷", "💸", "💳", "🧾", "✉️", "📧", "📨", "📩", "📤", "📥", "📦", "📫", "📬", "📭", "📮", "📯", "📈", "📉", "📊", "📅", "📆", "🗓️", "📇", "🗑️", "🔒", "🔓", "🔏", "🔐", "🔑", "🗝️", "🔨", "🪓", "⛏️", "⚒️", "🛠️", "🗡️", "⚔️", "💣", "🛡️", "☠️", "⚰️", "🔮", "🧿", "🪬", "💈", "🔬", "🔭", "📡", "💉", "🩸", "💊", "🩹", "🩺", "🚪", "🛏️", "🛋️", "🚽", "🚿", "🛁", "🪒", "🧴", "🧹", "🧺", "🧻", "🧼", "🧯", "🛒", "⚠️", "⛔", "🚫", "📵", "🔞", "⚛️", "🕉️", "✡️", "☸️", "☯️", "✝️", "☦️", "☪️", "☮️", "🕎", "🔯", "▶️", "⏩", "⏭️", "⏯️", "◀️", "⏪", "⏮️", "🔼", "⏫", "🔽", "⏬", "⏸️", "⏹️", "⏺️", "⏏️", "📶", "📳", "📴", "♀️", "♂️", "✖️", "➕", "➖", "➗", "♾️", "‼️", "⁉️", "❓", "❔", "❕", "❗", "〰️", "💱", "💲", "♻️", "⭕", "✅", "☑️", "✔️", "❌", "❎", "➰", "➿", "〽️", "✳️", "✴️", "❇️", "©️", "®️", "™️", "#️⃣", "*️⃣", "0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    };
+    let currentWidgetEmojiCat = 'smileys';
+
+    function renderWidgetEmojis() {
+      const grid = document.getElementById("widget-emoji-grid");
+      const search = (document.getElementById("widget-emoji-search")?.value || "").toLowerCase();
+      if (!grid) return;
+      grid.innerHTML = "";
+      const list = WIDGET_EMOJI_DATA[currentWidgetEmojiCat] || [];
+      const filtered = list.filter(e => !search || e.includes(search));
+      filtered.forEach(em => {
+        const span = document.createElement("span");
+        span.className = "emoji-opt";
+        span.style.cursor = "pointer";
+        span.style.padding = "4px";
+        span.style.borderRadius = "6px";
+        span.style.transition = "transform 0.1s";
+        span.textContent = em;
+        span.onmouseover = () => span.style.transform = "scale(1.25)";
+        span.onmouseout = () => span.style.transform = "scale(1)";
+        span.onclick = () => insertWidgetEmoji(em);
+        grid.appendChild(span);
+      });
+    }
+
+    function selectWidgetEmojiCategory(cat) {
+      currentWidgetEmojiCat = cat;
+      renderWidgetEmojis();
+    }
+
+    function enableInput() {
+      const input = document.getElementById("msg-input");
+      const sendBtn = document.getElementById("send-btn");
+      const fileBtn = document.getElementById("file-btn");
+      const emojiBtn = document.getElementById("emoji-btn");
+
+      if (input) input.disabled = false;
+      if (sendBtn) sendBtn.disabled = false;
+      if (fileBtn) { fileBtn.disabled = false; fileBtn.style.opacity = "1"; fileBtn.style.pointerEvents = "auto"; }
+      if (emojiBtn) { emojiBtn.disabled = false; emojiBtn.style.opacity = "1"; emojiBtn.style.pointerEvents = "auto"; }
+    }
+
+    function disableInput() {
+      const input = document.getElementById("msg-input");
+      const sendBtn = document.getElementById("send-btn");
+      const fileBtn = document.getElementById("file-btn");
+      const emojiBtn = document.getElementById("emoji-btn");
+
+      if (input) input.disabled = true;
+      if (sendBtn) sendBtn.disabled = true;
+      if (fileBtn) { fileBtn.disabled = true; fileBtn.style.opacity = "0.3"; fileBtn.style.pointerEvents = "none"; }
+      if (emojiBtn) { emojiBtn.disabled = true; emojiBtn.style.opacity = "0.3"; emojiBtn.style.pointerEvents = "none"; }
+      const popover = document.getElementById("emoji-picker-popover");
+      if (popover) popover.style.display = "none";
+    }
+
+    function triggerWidgetFileUpload() {
+      if (isBlockedVisitor) {
+        showToast("🚫 Akses chat Anda telah diblokir.");
+        return;
+      }
+      if (!agentMode && !window._flowInputNext) {
+        showToast("⚠️ Lampiran file hanya tersedia saat terhubung dengan Customer Service.");
+        return;
+      }
+      document.getElementById("file-input").click();
+    }
+
+    function filterWidgetEmojis() {
+      renderWidgetEmojis();
+    }
+
+    function toggleWidgetEmoji() {
+      if (isBlockedVisitor) {
+        showToast("🚫 Akses chat Anda telah diblokir.");
+        return;
+      }
+      if (!agentMode && !window._flowInputNext) {
+        showToast("⚠️ Emoji hanya tersedia saat terhubung dengan Customer Service.");
+        return;
+      }
+      const el = document.getElementById("emoji-picker-popover");
+      if (el) {
+        const isOpen = el.style.display !== "none";
+        el.style.display = isOpen ? "none" : "block";
+        if (!isOpen) renderWidgetEmojis();
+      }
+    }
+
+    function insertWidgetEmoji(em) {
+      const input = document.getElementById("msg-input");
+      if (input) {
+        input.value += em;
+        input.focus();
+        autoResize(input);
+      }
+      toggleWidgetEmoji();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SEND MESSAGE
+    // ═══════════════════════════════════════════════════════════════
+
+    function sendMessage() {
+      const input = document.getElementById("msg-input");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      autoResize(input);
+      input.style.height = "auto";
+
+      // Flow input override
+      if (window._flowInputNext) {
+        window._flowInputNext(text);
+        return;
+      }
+
+      if (!agentMode) return;
+
+      const clientId = appendVisitorMessage(text);
+      socket.emit("visitor:message", { text, clientId });
+
+      // Broadcast to other open browser tabs instantly via BroadcastChannel!
+      try {
+        tabSyncChannel?.postMessage({
+          type: "VISITOR_MESSAGE",
+          payload: {
+            text,
+            sender_type: "visitor",
+            client_id: clientId,
+            created_at: new Date().toISOString(),
+          }
+        });
+      } catch (e) { }
+    }
+
+    function handleKeydown(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function handleTyping() {
+      socket.emit("visitor:typing", { typing: true });
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        socket.emit("visitor:typing", { typing: false });
+      }, 1500);
+    }
+
+    // ── File Upload ──────────────────────────────────────────────────
+    function handleWidgetFileSelection(event) {
+      handleFileUpload(event);
+    }
+
+    async function handleFileUpload(event) {
+      const files = Array.from(event.target.files || []);
+      if (files.length === 0) return;
+      event.target.value = "";
+
+      if (isBlockedVisitor) {
+        showToast("🚫 Akses percakapan Anda telah diblokir.");
+        return;
+      }
+
+      for (const file of files) {
+        await uploadSingleWidgetFile(file);
+      }
+    }
+
+    async function uploadSingleWidgetFile(file) {
+      // Show optimistic loading bubble immediately
+      const tempId = "temp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+      const isImage = file.type.startsWith("image/");
+      const previewUrl = isImage ? URL.createObjectURL(file) : null;
+      const tempRow = document.createElement("div");
+      tempRow.className = "msg-row visitor";
+      tempRow.id = tempId;
+      tempRow.innerHTML = `
+    <div class="msg-body">
+      <div class="msg-sender-name">${localStorage.getItem("vlc_vname_" + WORKSPACE) || "Saya"}</div>
+      <div class="msg-bubble">
+        ${previewUrl ? `<img src="${previewUrl}" style="max-width:200px;border-radius:8px;opacity:0.6" alt="uploading...">` : `📎 ${file.name}`}
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:4px">⏳ Mengunggah...</div>
+      </div>
+      <div class="msg-time">${formatTime(new Date())}</div>
+    </div>
+  `;
+      document.getElementById("messages").appendChild(tempRow);
+      scrollToBottom();
+
+      const formData = new FormData();
+      formData.append("file", file);
+      if (convId) formData.append("conversationId", convId);
+      formData.append("visitorId", VISITOR_ID);
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/messages/upload-visitor`, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Upload gagal");
+
+        // Replace optimistic bubble with confirmed message
+        const confirmedRow = document.getElementById(tempId);
+        if (confirmedRow) {
+          confirmedRow.setAttribute("data-msg-id", data.messageId);
+          const bubbleEl = confirmedRow.querySelector(".msg-bubble");
+          if (bubbleEl) {
+            if (data.msgType === "image") {
+              bubbleEl.innerHTML = `<img src="${API_BASE}${data.fileUrl}" style="max-width:220px;border-radius:8px;cursor:pointer" onclick="openLightbox('${API_BASE}${data.fileUrl}')" alt="${data.fileName}"><div class="msg-time" style="margin-top:4px">${formatTime(new Date())} <span class="read-receipt">✓</span></div>`;
+            } else {
+              bubbleEl.innerHTML = `<a href="${API_BASE}${data.fileUrl}" target="_blank" rel="noopener" style="color:#60a5fa">📎 ${data.fileName}</a><div class="msg-time" style="margin-top:4px">${formatTime(new Date())} <span class="read-receipt">✓</span></div>`;
+            }
+          }
+        }
+        if (data.conversationId) convId = data.conversationId;
+        showToast("✅ File terkirim!");
+      } catch (err) {
+        const failedRow = document.getElementById(tempId);
+        if (failedRow) failedRow.remove();
+        showToast("❌ Gagal upload: " + (err.message || "Terjadi kesalahan"));
+        console.error("[vlc] File upload error:", err);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SURVEY
+    // ═══════════════════════════════════════════════════════════════
+
+    function selectSurvey(key, value, btn) {
+      surveyData[key] = value;
+      const parent = btn.closest(".survey-options");
+      parent.querySelectorAll(".survey-opt").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+    }
+
+    function setRating(n) {
+      surveyData.rating = n;
+      document.querySelectorAll(".star").forEach((s, i) => {
+        s.classList.toggle("active", i < n);
+      });
+    }
+
+    function submitSurvey() {
+      socket.emit("visitor:rating", {
+        satisfaction: surveyData.satisfaction || null,
+        resolved: surveyData.resolved || null,
+        rating: surveyData.rating || null,
+        comment: document.getElementById("survey-comment").value.trim() || null,
+      });
+      showFinalScreen();
+    }
+
+    function skipSurvey() { showFinalScreen(); }
+
+    function showFinalScreen() {
+      const screen = document.getElementById("screen-survey");
+      screen.innerHTML = `
+    <div style="font-size:50px;margin-bottom:12px;margin-top:20px">🎉</div>
+    <div class="survey-title">Terima kasih!</div>
+    <div class="survey-sub" style="margin-top:6px">Penilaian Anda sangat berharga bagi kami.</div>
+    <button onclick="resetWidget()" style="margin-top:20px;padding:11px 28px;border-radius:10px;background:var(--primary);color:white;border:none;cursor:pointer;font-weight:700;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.2)">
+      🔄 Mulai Percakapan Baru
+    </button>
+  `;
+    }
+
+    function resetWidget() {
+      // Clear conversation state
+      convId = null;
+      agentMode = false;
+      flowState = { nodeId: "main", data: {}, log: [], mode: "menu" };
+      surveyData = { satisfaction: null, resolved: null, rating: null };
+      lastMsgId = null;
+
+      // Clear messages & buttons
+      document.getElementById("messages").innerHTML = "";
+      document.getElementById("buttons-area").innerHTML = "";
+      document.getElementById("header-end-btn").style.display = "none";
+
+      // Restore survey screen HTML structure for next time
+      const surveyScreen = document.getElementById("screen-survey");
+      surveyScreen.innerHTML = `
+    <div class="survey-title">⭐ Terima kasih sudah menghubungi kami!</div>
+    <div class="survey-sub">Bantu kami dengan memberikan penilaian Anda.</div>
+    <div class="survey-card">
+      <div>
+        <div class="survey-q">Apakah pelayanan kami memuaskan?</div>
+        <div class="survey-options">
+          <button class="survey-opt" onclick="selectSurvey('satisfaction','yes',this)">✅ Ya</button>
+          <button class="survey-opt" onclick="selectSurvey('satisfaction','no',this)">❌ Tidak</button>
+        </div>
+      </div>
+      <div>
+        <div class="survey-q">Apakah masalah Anda terselesaikan?</div>
+        <div class="survey-options">
+          <button class="survey-opt" onclick="selectSurvey('resolved','yes',this)">✅ Ya</button>
+          <button class="survey-opt" onclick="selectSurvey('resolved','no',this)">❌ Tidak</button>
+        </div>
+      </div>
+      <div>
+        <div class="survey-q">Berikan rating untuk layanan kami:</div>
+        <div class="rating-stars" id="rating-stars">
+          <span class="star" onclick="setRating(1)" data-v="1">⭐</span>
+          <span class="star" onclick="setRating(2)" data-v="2">⭐</span>
+          <span class="star" onclick="setRating(3)" data-v="3">⭐</span>
+          <span class="star" onclick="setRating(4)" data-v="4">⭐</span>
+          <span class="star" onclick="setRating(5)" data-v="5">⭐</span>
+        </div>
+      </div>
+      <div>
+        <div class="survey-q">Komentar (opsional):</div>
+        <textarea class="survey-comment" id="survey-comment" rows="2" placeholder="Sampaikan saran atau keluhan Anda..."></textarea>
+      </div>
+      <button class="survey-submit" onclick="submitSurvey()">Kirim Penilaian</button>
+    </div>
+    <button class="survey-skip" onclick="skipSurvey()">Lewati</button>
+  `;
+
+      // Re-connect socket to start fresh conversation
+      if (socket) {
+        socket.disconnect();
+        socket.connect();
+      }
+
+      // Transition back to prechat
+      if (branding && branding.prechatEnabled) {
+        showScreen("prechat");
+      } else {
+        showScreen("chat");
+        renderFlowNode("main");
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // END CHAT / CONFIRM DIALOG & RESET UI
+    // ═══════════════════════════════════════════════════════════════
+
+    function endSessionAndResetUI() {
+      hasActiveSession = false;
+      agentMode = (branding && branding.chatbotEnabled === false);
+      window._flowInputNext = null;
+      flowState = { nodeId: "main", data: {}, log: [], mode: "menu" };
+      convId = null; // Reset convId so next session gets fresh conversation ID
+      widgetPreviousSessions = []; // Clear previous sessions list — next connect will re-fetch
+      isLoadingPastSession = false;
+      document.getElementById("messages").innerHTML = "";
+      const btnArea = document.getElementById("buttons-area");
+      if (btnArea) btnArea.innerHTML = "";
+
+      const endBtn = document.getElementById("header-end-btn");
+      if (endBtn) endBtn.style.display = "none";
+
+      // Remove any stale history trigger from previous session
+      const oldTrigger = document.getElementById("widget-history-trigger");
+      if (oldTrigger) oldTrigger.remove();
+
+      if (branding && branding.postchatEnabled) {
+        // Show post-chat survey if configured
+        showScreen("survey");
+      } else if (branding && branding.prechatEnabled) {
+        // Return to pre-chat form for next session
+        buildPrechatForm(branding.prechatFields || []);
+        showScreen("prechat");
+      } else {
+        // Chatbot-only mode: go back to the welcome/chat screen WITHOUT auto-triggering bot.
+        // The visitor must manually click "Mulai Percakapan" to start a new session.
+        // DO NOT call renderFlowNode here — that caused the bug where bot kept reappearing.
+        showScreen("chat");
+        // Re-show start-chat button so visitor can begin a new session
+        const startBtn = document.getElementById("start-chat-btn");
+        if (startBtn) startBtn.style.display = "";
+        disableInput();
+      }
+    }
+
+    function showEndConfirm() {
+      socket?.emit("visitor:end");
+      try { tabSyncChannel?.postMessage({ type: "CHAT_RESOLVED" }); } catch (e) { }
+      endSessionAndResetUI();
+    }
+
+    let hasCsOnline = false;
+    let socketReady = false; // true when socket connection is alive (does NOT imply CS online)
+
+    function updateStatus(online) {
+      // Only update hasCsOnline when explicitly passed a boolean (from agents:update / applyBranding)
+      // Do NOT call this with (true) just because the socket connected — that would fake CS online status
+      if (typeof online === "boolean") {
+        hasCsOnline = online;
+        isOnline = online;
+      }
+      const dot = document.getElementById("status-dot");
+      const text = document.getElementById("status-text");
+      if (!dot || !text) return;
+
+      if (!socketReady) {
+        dot.className = "status-dot offline";
+        text.textContent = "Menghubungkan...";
+        return;
+      }
+
+      const isBotEnabled = branding?.chatbotEnabled !== false;
+
+      if (hasCsOnline) {
+        // State 1 — CS online
+        dot.className = "status-dot online";
+        text.textContent = "Online";
+      } else if (isBotEnabled) {
+        // State 2 — Bot aktif, CS offline
+        dot.className = "status-dot bot";
+        text.textContent = "Layanan Tersedia · Tim CS akan segera bergabung";
+      } else {
+        // State 3 — Semua offline
+        dot.className = "status-dot offline";
+        text.textContent = "CS sedang offline · Tinggalkan pesan, kami segera balas";
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // UI HELPERS
+    // ═══════════════════════════════════════════════════════════════
+
+    function showScreen(name) {
+      currentScreen = name;
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      const target = document.getElementById("screen-" + name);
+      if (target) target.classList.add("active");
+
+      const endBtn = document.getElementById("header-end-btn");
+      if (endBtn) {
+        endBtn.style.display = (name === "chat") ? "block" : "none";
+      }
+    }
+
+    // enableInput() and disableInput() are defined above (full version that also handles
+    // file-btn and emoji-btn). These stubs are intentionally removed to avoid conflicts.
+
+    function autoResize(el) {
+      if (!el) return;
+      if (!el.value || el.value.trim() === "") {
+        el.style.height = "24px";
+        el.style.overflowY = "hidden";
+        return;
+      }
+      el.style.height = "auto";
+      const maxHeight = 120;
+      if (el.scrollHeight > maxHeight) {
+        el.style.height = maxHeight + "px";
+        el.style.overflowY = "auto";
+      } else {
+        el.style.height = el.scrollHeight + "px";
+        el.style.overflowY = "hidden";
+      }
+    }
+
+    function scrollToBottom(instant) {
+      const msgs = document.getElementById("messages");
+      if (!msgs) return;
+      if (instant) {
+        // Disable smooth scroll momentarily for instant jump (e.g. history restore / chat start)
+        msgs.style.scrollBehavior = "auto";
+        msgs.scrollTop = msgs.scrollHeight;
+        // Re-enable smooth scroll after layout paint so subsequent new messages scroll smoothly
+        requestAnimationFrame(() => { msgs.style.scrollBehavior = "smooth"; });
+      } else {
+        msgs.style.scrollBehavior = "smooth";
+        requestAnimationFrame(() => msgs.scrollTo({ top: msgs.scrollHeight, behavior: "smooth" }));
+      }
+    }
+
+    function showToast(msg, duration = 2500) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), duration);
+    }
+
+    function minimizeWidget() {
+      notifyParent("vlc:close", {});
+    }
+
+    function notifyParent(type, data) {
+      if (window.parent !== window) {
+        window.parent.postMessage({ source: "vlc-widget", type, ...data }, "*");
+      }
+    }
+
+    function resetWidget() {
+      location.reload();
+    }
+
+    function formatTime(date) {
+      const d = date ? new Date(date) : new Date();
+      return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + " B";
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+      return (bytes / 1048576).toFixed(1) + " MB";
+    }
+
+    // Simple markdown renderer
+    function markdownToHtml(text) {
+      if (!text) return "";
+      return text
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.*?)\*/g, "<em>$1</em>")
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:#60a5fa">$1</a>')
+        .replace(/\n/g, "<br>");
+    }
+
+    // Lightbox
+    function openLightbox(src) {
+      document.getElementById("lightbox-img").src = src;
+      document.getElementById("lightbox").classList.add("show");
+    }
+    function closeLightbox() {
+      document.getElementById("lightbox").classList.remove("show");
+    }
+
+    // ── Boot ─────────────────────────────────────────────────────────
+    if (WORKSPACE) {
+      // Instantly fetch settings on boot so logo, brand color, username input, and announcement render immediately
+      fetch(API_BASE + "/public/settings/" + WORKSPACE)
+        .then(r => r.json())
+        .then(b => {
+          if (b && !b.error) {
+            applyBranding(b);
+            updateStatus(b?.is_online);
+          }
+        })
+        .catch(() => { });
+
+      connectSocket();
+    } else {
+      document.getElementById("prechat-sub").textContent = "Error: Workspace tidak dikonfigurasi.";
+    }
+  </script>
+</body>
+
+</html>

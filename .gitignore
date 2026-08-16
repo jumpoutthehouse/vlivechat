@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.local
+*.zip
+*.rdb
+dist/
+backend/pgsql/
+backend/redis/
+backend/uploads/*
+!backend/uploads/.gitkeep
+.vscode/
+scratch/
+.DS_Store
+Thumbs.db
