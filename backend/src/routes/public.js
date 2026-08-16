@@ -23,17 +23,39 @@ router.get("/settings/:code", async (req, res) => {
       return res.status(404).json({ error: "Workspace tidak ditemukan" });
     }
 
-    // Check if any agent is online and list CS agents
+    // Check if any agent is online and list CS agents with live socket & 5m window cross-check
+    const { getOnlineAgents } = require("../redis");
+    const onlineIds = await getOnlineAgents(rows[0].id);
+    const activeDashboardAgents = new Set(onlineIds);
+
+    try {
+      const io = req.app.get("io");
+      const dashboardNsp = io ? io.of("/dashboard") : null;
+      if (dashboardNsp && dashboardNsp.sockets) {
+        for (const [_, s] of dashboardNsp.sockets) {
+          if (s.agentId && s.workspaceId === rows[0].id) {
+            activeDashboardAgents.add(s.agentId);
+          }
+        }
+      }
+    } catch (e) {}
+
     const { rows: agentRows } = await pool.query(
-      `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY is_online DESC, created_at ASC`,
+      `SELECT id, display_name, name, avatar_url, avatar_bg, is_online, last_seen_at FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY created_at ASC`,
       [rows[0].id]
     );
 
-    const onlineCount = agentRows.filter(a => a.is_online).length;
+    const formattedAgents = agentRows.map(a => {
+      const isRecentlyActive = a.last_seen_at && (Date.now() - new Date(a.last_seen_at).getTime() < 5 * 60 * 1000);
+      const isOnline = a.is_online || activeDashboardAgents.has(a.id) || isRecentlyActive;
+      return { ...a, is_online: !!isOnline };
+    });
+
+    const onlineCount = formattedAgents.filter(a => a.is_online).length;
 
     res.json({
       ...rows[0],
-      agents: agentRows,
+      agents: formattedAgents,
       is_online: onlineCount > 0,
       server_time: new Date().toISOString(),
     });
@@ -51,11 +73,29 @@ router.get("/status/:code", async (req, res) => {
     );
     if (!ws[0]) return res.json({ is_online: false });
 
+    const { getOnlineAgents } = require("../redis");
+    const onlineIds = await getOnlineAgents(ws[0].id);
+    const activeDashboardAgents = new Set(onlineIds);
+
+    try {
+      const io = req.app.get("io");
+      const dashboardNsp = io ? io.of("/dashboard") : null;
+      if (dashboardNsp && dashboardNsp.sockets) {
+        for (const [_, s] of dashboardNsp.sockets) {
+          if (s.agentId && s.workspaceId === ws[0].id) {
+            activeDashboardAgents.add(s.agentId);
+          }
+        }
+      }
+    } catch (e) {}
+
     const { rows } = await pool.query(
-      "SELECT COUNT(*) AS count FROM agents WHERE workspace_id=$1 AND is_online=TRUE",
+      "SELECT id, is_online, last_seen_at FROM agents WHERE workspace_id=$1 AND is_active=TRUE",
       [ws[0].id]
     );
-    res.json({ is_online: parseInt(rows[0].count) > 0 });
+
+    const isOnline = rows.some(a => a.is_online || activeDashboardAgents.has(a.id) || (a.last_seen_at && Date.now() - new Date(a.last_seen_at).getTime() < 5 * 60 * 1000));
+    res.json({ is_online: isOnline });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

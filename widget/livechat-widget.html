@@ -1353,9 +1353,15 @@
     const WORKSPACE = urlParams.get("w") || "";
     const PAGE = urlParams.get("page") || location.href;
     const REF = urlParams.get("ref") || "";
-    const API_BASE = urlParams.get("apiBase") || "http://localhost:3001";
+    const API_BASE = urlParams.get("apiBase") || (window.location.hostname === "localhost" ? "http://localhost:3001" : "https://vlivechat-backend.onrender.com");
     const IS_EMBED = urlParams.get("embed") === "1";
     const VISITOR_ID = getVisitorId();
+
+    function getWidgetFileUrl(url) {
+      if (!url) return "";
+      if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+      return `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+    }
 
     if (IS_EMBED) document.body.classList.add("embedded");
 
@@ -2061,8 +2067,8 @@
       if (pcLogo) pcLogo.style.display = "none"; // Hide workspace logo circle if CS avatars are present to avoid double stacking
       bar.innerHTML = agents.map(a => {
         const avatarContent = a.avatar_url
-          ? `<img src="${API_BASE}${a.avatar_url}" alt="${a.display_name || a.name}">`
-          : (a.display_name || a.name || "CS").charAt(0).toUpperCase();
+          ? `<img src="${getWidgetFileUrl(a.avatar_url)}" alt="${escapeHtml(a.display_name || a.name)}">`
+          : escapeHtml(a.display_name || a.name || "CS").charAt(0).toUpperCase();
         const dotCls = a.is_online ? "cs-avatar-dot" : "cs-avatar-dot offline";
         return `
       <div class="cs-avatar-item">
@@ -2479,10 +2485,10 @@
       let bubbleContent = "";
 
       if (msg.message_type === "image" && msg.file_url) {
-        bubbleContent = `<img class="msg-image" src="${API_BASE}${msg.file_url}" alt="image" onclick="openLightbox('${API_BASE}${msg.file_url}')">`;
+        bubbleContent = `<img class="msg-image" src="${getWidgetFileUrl(msg.file_url)}" alt="image" onclick="openLightbox('${getWidgetFileUrl(msg.file_url)}')">`;
       } else if (msg.message_type === "file" && msg.file_url) {
         const fileSize = msg.file_size ? formatFileSize(msg.file_size) : "";
-        bubbleContent = `<a class="msg-file" href="${API_BASE}${msg.file_url}" target="_blank" download="${msg.file_name || 'file'}">
+        bubbleContent = `<a class="msg-file" href="${getWidgetFileUrl(msg.file_url)}" target="_blank" download="${msg.file_name || 'file'}">
       <span class="msg-file-icon">📎</span>
       <div class="msg-file-info">
         <div class="msg-file-name">${msg.file_name || 'file'}</div>
@@ -2505,7 +2511,7 @@
 
       const avatarHtml = senderType === "agent"
         ? `<div class="msg-avatar">${msg.sender_avatar
-          ? `<img src="${API_BASE}${msg.sender_avatar}" alt="avatar">`
+          ? `<img src="${getWidgetFileUrl(msg.sender_avatar)}" alt="avatar">`
           : (msg.sender_display_name || msg.sender_name || "CS").charAt(0).toUpperCase()
         }</div>`
         : "";
@@ -2910,9 +2916,9 @@
           const bubbleEl = confirmedRow.querySelector(".msg-bubble");
           if (bubbleEl) {
             if (data.msgType === "image") {
-              bubbleEl.innerHTML = `<img src="${API_BASE}${data.fileUrl}" style="max-width:220px;border-radius:8px;cursor:pointer" onclick="openLightbox('${API_BASE}${data.fileUrl}')" alt="${data.fileName}"><div class="msg-time" style="margin-top:4px">${formatTime(new Date())} <span class="read-receipt">✓</span></div>`;
+              bubbleEl.innerHTML = `<img src="${getWidgetFileUrl(data.fileUrl)}" style="max-width:220px;border-radius:8px;cursor:pointer" onclick="openLightbox('${getWidgetFileUrl(data.fileUrl)}') alt="${data.fileName}"><div class="msg-time" style="margin-top:4px">${formatTime(new Date())} <span class="read-receipt">✓</span></div>`;
             } else {
-              bubbleEl.innerHTML = `<a href="${API_BASE}${data.fileUrl}" target="_blank" rel="noopener" style="color:#60a5fa">📎 ${data.fileName}</a><div class="msg-time" style="margin-top:4px">${formatTime(new Date())} <span class="read-receipt">✓</span></div>`;
+              bubbleEl.innerHTML = `<a href="${getWidgetFileUrl(data.fileUrl)}" target="_blank" rel="noopener" style="color:#60a5fa">📎 ${data.fileName}</a><div class="msg-time" style="margin-top:4px">${formatTime(new Date())} <span class="read-receipt">✓</span></div>`;
             }
           }
         }
