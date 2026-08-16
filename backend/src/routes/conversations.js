@@ -64,7 +64,13 @@ router.get("/", auth, async (req, res) => {
     if (visitor_id || isArchived) {
       // Return ALL individual session cards (no DISTINCT ON grouping) for archives or specific visitor
       const resQuery = await pool.query(
-        `SELECT c.*,
+        `SELECT c.id, c.workspace_id, c.visitor_id, c.visitor_name, c.visitor_email, c.visitor_page, c.visitor_ref,
+                c.visitor_tz, c.visitor_lang, c.visitor_screen, c.visitor_ip, c.visitor_country, c.visitor_city,
+                c.visitor_country_code, c.visitor_lat, c.visitor_lon, c.visitor_isp, c.visitor_ua, c.prechat_data,
+                c.assigned_agent_id, c.status, c.flow_data, c.flow_log, c.flow_mode, c.tags, c.first_message_at,
+                c.first_response_at, c.resolved_at, c.missed_at, c.rating_satisfaction, c.rating_resolved,
+                c.rating_score, c.rating_comment, c.rated_at, c.source, c.notes, c.is_blocked, c.previous_names,
+                c.created_at, c.updated_at,
            w.name AS workspace_name, w.brand_name, w.brand_color, w.chatbot_enabled,
            a.name AS agent_name, a.avatar_url AS agent_avatar, a.display_name AS agent_display_name,
            (SELECT text FROM messages WHERE conversation_id=c.id AND is_internal=FALSE ORDER BY created_at DESC LIMIT 1) AS last_message,
@@ -86,7 +92,14 @@ router.get("/", auth, async (req, res) => {
       // Default: Distinct per visitor for normal active chats list
       const resQuery = await pool.query(
         `SELECT * FROM (
-           SELECT DISTINCT ON (c.visitor_id) c.*,
+           SELECT DISTINCT ON (c.visitor_id)
+             c.id, c.workspace_id, c.visitor_id, c.visitor_name, c.visitor_email, c.visitor_page, c.visitor_ref,
+             c.visitor_tz, c.visitor_lang, c.visitor_screen, c.visitor_ip, c.visitor_country, c.visitor_city,
+             c.visitor_country_code, c.visitor_lat, c.visitor_lon, c.visitor_isp, c.visitor_ua, c.prechat_data,
+             c.assigned_agent_id, c.status, c.flow_data, c.flow_log, c.flow_mode, c.tags, c.first_message_at,
+             c.first_response_at, c.resolved_at, c.missed_at, c.rating_satisfaction, c.rating_resolved,
+             c.rating_score, c.rating_comment, c.rated_at, c.source, c.notes, c.is_blocked, c.previous_names,
+             c.created_at, c.updated_at,
              w.name AS workspace_name, w.brand_name, w.brand_color, w.chatbot_enabled,
              a.name AS agent_name, a.avatar_url AS agent_avatar, a.display_name AS agent_display_name,
              (SELECT text FROM messages WHERE conversation_id=c.id AND is_internal=FALSE ORDER BY created_at DESC LIMIT 1) AS last_message,
