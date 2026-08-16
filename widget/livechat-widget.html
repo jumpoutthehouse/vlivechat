@@ -1563,13 +1563,15 @@
 
       socket.on("flow:restore", (state) => {
         hasActiveSession = true;
-        if (state.mode === "agent") {
+        if (isBlockedVisitor || state.mode === "agent") {
           agentMode = true;
           flowState.mode = "agent";
           window._flowInputNext = null;
           showScreen("chat");
-          enableInput();
-          document.getElementById("msg-input").placeholder = "Tulis pesan...";
+          if (!isBlockedVisitor) {
+            enableInput();
+            document.getElementById("msg-input").placeholder = "Tulis pesan...";
+          }
           document.getElementById("header-end-btn").style.display = "block";
           const btnArea = document.getElementById("buttons-area");
           if (btnArea) btnArea.innerHTML = "";

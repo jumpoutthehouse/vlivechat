@@ -376,7 +376,7 @@ function registerVisitorSocket(visitorNsp, dashboardNsp) {
       socket.emit("history", {
         messages: msgs,
         activeConvId: conversation?.id || null,
-        flowMode: conversation?.flow_mode || null,
+        flowMode: isVisitorBlocked ? "agent" : (conversation?.flow_mode || null),
         // Explicitly send status: if no conversation or resolved, widget knows to show fresh screen
         status: conversation ? conversation.status : "resolved",
         isBlocked: isVisitorBlocked,
@@ -421,7 +421,7 @@ function registerVisitorSocket(visitorNsp, dashboardNsp) {
     // If conversation is active (not resolved), restore flow state or agent mode
     if (conversation && conversation.status !== 'resolved') {
       const flowState = await getFlowState(visitorId);
-      const isAgent = conversation.flow_mode === 'agent' || !!conversation.assigned_agent_id;
+      const isAgent = isVisitorBlocked || conversation.flow_mode === 'agent' || !!conversation.assigned_agent_id;
       socket.emit("flow:restore", {
         mode: isAgent ? "agent" : (flowState?.mode || "menu"),
         nodeId: flowState?.nodeId || "main",
