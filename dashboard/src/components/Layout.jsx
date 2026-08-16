@@ -367,16 +367,16 @@ export default function Layout() {
     let arr = [];
     if (Array.isArray(perms)) arr = perms;
     else if (typeof perms === "string") arr = perms.replace(/[{}]/g, "").split(",").map(s => s.trim()).filter(Boolean);
-    return [...new Set(["livechat", "archives", ...arr])];
+    return [...new Set(arr)];
   }
 
   const agentPerms = parsePerms(agent?.permissions);
   const visibleNav = navItems.filter(item => {
+    // superadmin sees everything
     if (agent?.role === "superadmin") return true;
+    // superadmin-only items hidden for all others
     if (item.superadminOnly) return false;
-    if (agent?.role === "admin") return true;
-    if (item.perm === "livechat" || item.perm === "archives") return true;
-    if (agent?.role === "supervisor" && item.perm === "reports") return true;
+    // for admin/supervisor/agent: rely strictly on permissions array from DB
     return agentPerms.includes(item.perm);
   });
 
