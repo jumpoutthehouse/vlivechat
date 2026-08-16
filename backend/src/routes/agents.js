@@ -160,7 +160,7 @@ router.patch("/:id", auth, async (req, res) => {
     // Admin only
     if (isAdmin) {
       if (max_conversations !== undefined) { sets.push(`max_conversations=$${i++}`); vals.push(max_conversations); }
-      if (role !== undefined && req.agentRole === "superadmin") { sets.push(`role=$${i++}`); vals.push(role); }
+      if (role !== undefined && ["admin", "superadmin"].includes(req.agentRole)) { sets.push(`role=$${i++}`); vals.push(role); }
       if (permissions !== undefined && Array.isArray(permissions)) { sets.push(`permissions=$${i++}`); vals.push(permissions); }
       if (is_active !== undefined) { sets.push(`is_active=$${i++}`); vals.push(is_active); }
     }
