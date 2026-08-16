@@ -34,34 +34,44 @@ export default function Home() {
     }
   }, [isSuperadmin]);
 
+  const socket = useChatStore(s => s.socket);
+  const socketConnected = useChatStore(s => s.socketConnected);
+
   useEffect(() => {
     fetchHomeStats();
 
-    // 1. Live 5-second interval ticker for 100% realtime home stats
+    // 1. Live 3-second interval ticker for 100% realtime home stats
     const interval = setInterval(() => {
       fetchHomeStats(true);
-    }, 5000);
+    }, 3000);
 
     // 2. Listen to socket events for instant updates
-    const socket = useChatStore.getState().socket;
     if (socket) {
       const handleEvent = () => fetchHomeStats(true);
-      socket.on("conversation:new", handleEvent);
-      socket.on("conversation:update", handleEvent);
+      socket.on("conversation:new",      handleEvent);
+      socket.on("conversation:update",   handleEvent);
       socket.on("conversation:resolved", handleEvent);
-      socket.on("agents:update", handleEvent);
+      socket.on("agents:update",         handleEvent);
+      socket.on("agent:online",          handleEvent);
+      socket.on("agent:offline",         handleEvent);
+      socket.on("agent:status_changed",  handleEvent);
+      socket.on("agent:updated",         handleEvent);
 
       return () => {
         clearInterval(interval);
-        socket.off("conversation:new", handleEvent);
-        socket.off("conversation:update", handleEvent);
+        socket.off("conversation:new",      handleEvent);
+        socket.off("conversation:update",   handleEvent);
         socket.off("conversation:resolved", handleEvent);
-        socket.off("agents:update", handleEvent);
+        socket.off("agents:update",         handleEvent);
+        socket.off("agent:online",          handleEvent);
+        socket.off("agent:offline",         handleEvent);
+        socket.off("agent:status_changed",  handleEvent);
+        socket.off("agent:updated",         handleEvent);
       };
     }
 
     return () => clearInterval(interval);
-  }, [mode, selectedWorkspaceId]);
+  }, [mode, selectedWorkspaceId, socket, socketConnected]);
 
   async function fetchHomeStats(silent = false) {
     if (!silent) setLoading(true);

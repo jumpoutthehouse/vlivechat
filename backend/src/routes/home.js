@@ -52,9 +52,11 @@ router.get("/stats", auth, async (req, res) => {
     }
     const customersOnline = connectedVisitors.size;
 
-    // 3. Logged in Agents & Total Agents (Realtime socket connection + DB fallback)
+    // 3. Logged in Agents & Total Agents (Realtime socket connection + Redis + DB fallback)
+    const { getOnlineAgents } = require("../redis");
+    const onlineStoreIds = targetWs ? await getOnlineAgents(targetWs) : [];
     const dashboardNsp = io ? io.of("/dashboard") : null;
-    const connectedOnlineAgents = new Set();
+    const connectedOnlineAgents = new Set(onlineStoreIds);
 
     if (dashboardNsp && dashboardNsp.sockets) {
       for (const [_, s] of dashboardNsp.sockets) {
@@ -75,7 +77,9 @@ router.get("/stats", auth, async (req, res) => {
       wsParams
     );
     const dbOnlineCount = parseInt(agentRows[0]?.online_count || 0, 10);
-    const loggedInAgents = Math.max(connectedOnlineAgents.size, dbOnlineCount);
+    // Requesting agent is actively making the request, so count at least 1 if targetWs matches
+    const isCurrentAgentMatch = !targetWs || targetWs === req.workspaceId;
+    const loggedInAgents = Math.max(connectedOnlineAgents.size, dbOnlineCount, isCurrentAgentMatch ? 1 : 0);
     const totalAgents = parseInt(agentRows[0]?.total_count || 0, 10);
 
     // 4. Queued Visitors (open conversations without assigned agent)

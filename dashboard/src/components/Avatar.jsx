@@ -1,8 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { getFileUrl } from "../api";
 
 export default function Avatar({ src, name, bg, size = "w-9 h-9", textClass = "text-xs", className = "" }) {
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [src]);
+
   const initial = (name || "A").charAt(0).toUpperCase();
 
   if (src && !imgError) {
