@@ -1596,8 +1596,18 @@
         }
 
         if (isBlocked || isBlockedVisitor) {
+          isRenderingHistory = true;
+          hasActiveSession = true;
+          showScreen("chat");
+          msgs.forEach(renderMessage);
           setVisitorBlockedUI(false);
-          scrollWidgetToBottom(true);
+          if (widgetPreviousSessions.length > 0) {
+            requestAnimationFrame(() => renderWidgetPreviousSessionTrigger());
+          }
+          requestAnimationFrame(() => {
+            scrollWidgetToBottom(true);
+            isRenderingHistory = false;
+          });
           return;
         }
 
