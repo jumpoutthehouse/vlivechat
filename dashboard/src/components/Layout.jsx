@@ -340,10 +340,10 @@ export default function Layout() {
     connectSocket();
     if (agent?.id) {
       api.get(`/agents/${agent.id}`).then(({ data }) => {
-        if (data?.permissions) {
-          let p = data.permissions;
+        if (data) {
+          let p = data.permissions || agent.permissions;
           if (typeof p === "string") p = p.replace(/[{}]/g, "").split(",").map(s => s.trim()).filter(Boolean);
-          const ua = { ...agent, permissions: p };
+          const ua = { ...agent, ...data, permissions: p };
           localStorage.setItem("vlc_agent", JSON.stringify(ua));
           useChatStore.setState({ agent: ua });
         }
