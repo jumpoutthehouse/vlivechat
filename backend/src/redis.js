@@ -11,22 +11,26 @@ function isRedisConnected() {
 
 function getRedis() {
   if (!redis) {
-    redis = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      port: parseInt(process.env.REDIS_PORT) || 6379,
-      password: process.env.REDIS_PASSWORD || undefined,
-      retryStrategy: (times) => {
-        if (times > 2) {
-          redisAvailable = false;
-          logger.warn("⚠️ Redis not reachable on 127.0.0.1:6379 — Seamlessly using In-Memory Fallback Cache.");
-          return null; // Stop reconnecting spam
-        }
-        return 1000;
-      },
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
-    });
+    const redisConfig = process.env.REDIS_URL
+      ? process.env.REDIS_URL
+      : {
+          host: process.env.REDIS_HOST || "localhost",
+          port: parseInt(process.env.REDIS_PORT) || 6379,
+          password: process.env.REDIS_PASSWORD || undefined,
+          retryStrategy: (times) => {
+            if (times > 2) {
+              redisAvailable = false;
+              logger.warn("⚠️ Redis not reachable — Seamlessly using In-Memory Fallback Cache.");
+              return null;
+            }
+            return 1000;
+          },
+          lazyConnect: true,
+          maxRetriesPerRequest: 1,
+          enableOfflineQueue: false,
+        };
+
+    redis = new Redis(redisConfig);
 
     redis.on("connect", () => {
       redisAvailable = true;

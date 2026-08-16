@@ -412,7 +412,8 @@ async function migrate() {
       const adminHash = await bcrypt.hash("Admin@2024!", 12);
       await client.query(
         `INSERT INTO agents (workspace_id, email, password_hash, name, role, status)
-         VALUES ($1, 'admin@demo.com', $2, 'Demo Admin', 'admin', 'online')`,
+         VALUES ($1, 'admin@demo.com', $2, 'Demo Admin', 'admin', 'online')
+         ON CONFLICT (email) DO NOTHING`,
         [wsId, adminHash]
       );
 
