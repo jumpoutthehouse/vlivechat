@@ -251,17 +251,23 @@ router.post(
 
       if (!req.file) return res.status(400).json({ error: "File avatar tidak ditemukan" });
 
-      const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+      // Convert uploaded file to Base64 Data URI so it persists in PostgreSQL database across Render redeploys
+      const mimeType = req.file.mimetype || "image/jpeg";
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const avatarUrl = `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
 
-      // Delete old avatar
+      // Remove temp file from ephemeral local disk
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+
+      // Delete old avatar if it was a file path
       const { rows: old } = await pool.query("SELECT avatar_url FROM agents WHERE id=$1", [req.params.id]);
-      if (old[0]?.avatar_url) {
+      if (old[0]?.avatar_url && !old[0].avatar_url.startsWith("data:")) {
         const oldPath = path.join(process.env.UPLOAD_DIR || path.join(__dirname, "../../uploads"), old[0].avatar_url.replace("/uploads/", ""));
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        if (fs.existsSync(oldPath)) { try { fs.unlinkSync(oldPath); } catch (e) {} }
       }
 
       const { rows } = await pool.query(
-        "UPDATE agents SET avatar_url=$1, updated_at=NOW() WHERE id=$2 RETURNING id, workspace_id, name, display_name, avatar_url",
+        "UPDATE agents SET avatar_url=$1, updated_at=NOW() WHERE id=$2 RETURNING id, workspace_id, name, email, role, display_name, title, avatar_url, avatar_bg, is_online",
         [avatarUrl, req.params.id]
       );
 
@@ -275,13 +281,20 @@ router.post(
         io.of("/dashboard").emit("agent:updated", { agent: rows[0] });
         if (rows[0]?.workspace_id) {
           io.of("/dashboard").to(`workspace:${rows[0].workspace_id}`).emit("agent:updated", { agent: rows[0] });
+          
+          const { getOnlineAgents } = require("../redis");
+          const onlineIds = await getOnlineAgents(rows[0].workspace_id);
           const { rows: agentRows } = await pool.query(
-            `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY is_online DESC, created_at ASC`,
+            `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY created_at ASC`,
             [rows[0].workspace_id]
           );
+          const formattedAgents = agentRows.map(a => {
+            const isOnline = a.is_online || onlineIds.includes(a.id) || a.id === req.agentId;
+            return { ...a, is_online: isOnline };
+          });
           io.of("/livechat").to(`ws:${rows[0].workspace_id}`).emit("agents:update", {
-            agents: agentRows,
-            is_online: agentRows.some(a => a.is_online),
+            agents: formattedAgents,
+            is_online: formattedAgents.some(a => a.is_online),
           });
         }
       }

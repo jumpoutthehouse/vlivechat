@@ -55,13 +55,27 @@ function registerVisitorSocket(visitorNsp, dashboardNsp) {
       const { getOnlineAgents } = require("../redis");
       const onlineIds = await getOnlineAgents(workspace.id);
 
+      // Check active dashboard socket namespace for live connections
+      const activeDashboardAgents = new Set(onlineIds);
+      try {
+        const dashboardNsp = socket.nsp?.server?.of("/dashboard");
+        if (dashboardNsp && dashboardNsp.sockets) {
+          for (const [_, s] of dashboardNsp.sockets) {
+            if (s.agentId && s.workspaceId === workspace.id) {
+              activeDashboardAgents.add(s.agentId);
+            }
+          }
+        }
+      } catch (e) {}
+
       const { rows: agentRows } = await pool.query(
-        `SELECT id, display_name, name, avatar_url, avatar_bg, is_online FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY created_at ASC`,
+        `SELECT id, display_name, name, avatar_url, avatar_bg, is_online, last_seen_at FROM agents WHERE workspace_id=$1 AND role != 'superadmin' ORDER BY created_at ASC`,
         [workspace.id]
       );
       const formattedAgents = agentRows.map(a => {
-        const isOnline = a.is_online || onlineIds.includes(a.id);
-        return { ...a, is_online: isOnline };
+        const isRecentlyActive = a.last_seen_at && (Date.now() - new Date(a.last_seen_at).getTime() < 5 * 60 * 1000);
+        const isOnline = a.is_online || activeDashboardAgents.has(a.id) || isRecentlyActive;
+        return { ...a, is_online: !!isOnline };
       });
       socket.emit("agents:update", {
         agents: formattedAgents,
