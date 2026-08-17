@@ -1,6 +1,7 @@
 const express = require("express");
 const { pool } = require("../db");
 const { auth } = require("../middleware/auth");
+const { recordAuditLog } = require("../utils/auditLogger");
 
 const router = express.Router();
 
@@ -148,13 +149,18 @@ router.get("/", auth, async (req, res) => {
 // GET /api/v1/conversations/blocked — get all blocked visitors (distinct by visitor_id)
 router.get("/blocked", auth, async (req, res) => {
   try {
+    const isSuperadmin = req.agentRole === "superadmin";
+    const targetWs = req.query.workspace_id || (isSuperadmin ? null : req.workspaceId);
+    const wsCond = targetWs ? "AND c.workspace_id = $1" : "";
+    const params = targetWs ? [targetWs] : [];
+
     const { rows } = await pool.query(
       `SELECT DISTINCT ON (c.visitor_id) c.id, c.visitor_id, c.visitor_name, c.prechat_data, c.visitor_ip AS ip_address, CONCAT(COALESCE(c.visitor_city, 'Localhost'), ', ', COALESCE(c.visitor_country, 'ID')) AS location, c.is_blocked, c.updated_at, c.created_at,
          (SELECT text FROM messages WHERE conversation_id=c.id AND is_internal=FALSE ORDER BY created_at DESC LIMIT 1) AS last_message
        FROM conversations c
-       WHERE c.workspace_id=$1 AND c.is_blocked=TRUE
+       WHERE c.is_blocked=TRUE ${wsCond}
        ORDER BY c.visitor_id, c.updated_at DESC`,
-      [req.workspaceId]
+      params
     );
     res.json(rows);
   } catch (err) {

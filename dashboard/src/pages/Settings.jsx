@@ -88,8 +88,8 @@ export default function Settings() {
       await api.patch(`/conversations/${convId}/block`, { isBlocked: false });
       toast.success(`Akses visitor (${visitorName || "Visitor"}) telah dibuka kembali!`);
       loadBlocked();
-    } catch {
-      toast.error("Gagal membuka blokir visitor");
+    } catch (err) {
+      toast.error("Gagal membuka blokir visitor: " + (err.response?.data?.error || err.message));
     }
   }
 
